@@ -23,6 +23,11 @@ const merriweather = Merriweather({
 export const metadata: Metadata = {
   title: "VO2 Max Training",
   description: "Norwegian-style VO2 max training sessions",
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' }
+    ]
+  }
 };
 
 export default function RootLayout({

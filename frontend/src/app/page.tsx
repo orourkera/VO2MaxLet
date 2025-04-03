@@ -9,6 +9,13 @@ import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
 import Link from 'next/link';
 import { useSupabase } from '@/providers/SupabaseProvider';
+import Header from '@/components/Header';
+
+// Import CustomWalletButton dynamically with SSR disabled
+const CustomWalletButton = dynamic(
+    () => import('@/components/CustomWalletButton').then(mod => mod.CustomWalletButton),
+    { ssr: false }
+);
 
 // Interface for structure stored in state (durations in minutes)
 interface EditableStructure {
@@ -43,9 +50,9 @@ const calculateTotalDuration = (structureInSeconds: ReturnType<typeof convertStr
     return structureInSeconds.warmup + (intervalDuration * structureInSeconds.sets) + structureInSeconds.cooldown;
 };
 
-const PAYMENT_AMOUNT = 0.01; // Define payment amount constant
+const PAYMENT_AMOUNT = 0.005; // Define payment amount constant
 
-// Re-add dynamic import for WalletMultiButton
+// Re-add dynamic import for WalletMultiButton but we won't use it directly
 const WalletMultiButton = dynamic(
     () => import('@solana/wallet-adapter-react-ui').then(mod => mod.WalletMultiButton),
     { ssr: false }
@@ -80,9 +87,30 @@ export default function HomePage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
     const [currentTime, setCurrentTime] = useState<number>(Date.now());
+    const [solPrice, setSolPrice] = useState<number | null>(null);
 
     // State for the editable structure (times in minutes)
     const [editableStructure, setEditableStructure] = useState<EditableStructure>(DEFAULT_STRUCTURE_MINUTES);
+
+    // Fetch SOL price on component mount
+    useEffect(() => {
+        const fetchSolPrice = async () => {
+            try {
+                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+                const data = await response.json();
+                setSolPrice(data.solana.usd);
+            } catch (error) {
+                console.error('Error fetching SOL price:', error);
+            }
+        };
+        
+        fetchSolPrice();
+        
+        // Refresh price every 5 minutes
+        const interval = setInterval(fetchSolPrice, 5 * 60 * 1000);
+        
+        return () => clearInterval(interval);
+    }, []);
 
     // Recalculate total duration whenever editableStructure changes
     const totalWorkoutDuration = useMemo(() => {
@@ -449,6 +477,14 @@ export default function HomePage() {
         return result;
     };
 
+    // Add mounted state to handle client-side rendering
+    const [mounted, setMounted] = useState(false);
+    
+    // Set mounted state to true after component mounts
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     // Render the core UI regardless of connection status initially
     return (
         <div style={{
@@ -460,22 +496,19 @@ export default function HomePage() {
             color: '#e5e7eb',
             backgroundAttachment: 'fixed'
         }}>
-            {/* Top section: Header space + Wallet Button */}
-            <header style={{
-                position: 'relative',
-                height: '60px',
-                borderBottom: '1px solid rgba(31, 41, 55, 0.5)',
-                backdropFilter: 'blur(4px)'
-            }}>
+            {/* Use our shared Header component with back button disabled */}
+            <div style={{ position: 'relative' }}>
+                <Header showBackButton={false} />
+                {/* Position the wallet button in the top right */}
                 <div style={{
                     position: 'absolute',
                     top: '12px',
                     right: '16px',
                     zIndex: 10
                 }}>
-                    <WalletMultiButton />
+                    {mounted && <CustomWalletButton />}
                 </div>
-            </header>
+            </div>
 
             {/* Main Content Area - Centered + Takes remaining space */}
             <main style={{
@@ -936,22 +969,23 @@ export default function HomePage() {
                                     <div style={{
                                         marginTop: '24px',
                                         display: 'flex',
-                                        justifyContent: 'center'
+                                        justifyContent: 'flex-end'
                                     }}>
                                         <button
                                             onClick={handlePayment}
                                             disabled={isProcessing || !publicKey}
                                             style={{
-                                                background: 'linear-gradient(to right, #8b5cf6, #3b82f6)',
+                                                background: 'linear-gradient(to right, #9945ff, #14f195)',
                                                 color: 'white',
-                                                fontWeight: 'bold',
-                                                padding: '12px 24px',
-                                                borderRadius: '8px',
-                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.2)',
+                                                fontWeight: '300',
+                                                padding: '12px 16px',
+                                                borderRadius: '12px',
+                                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
                                                 opacity: (isProcessing || !publicKey) ? '0.5' : '1',
                                                 cursor: (isProcessing || !publicKey) ? 'not-allowed' : 'pointer',
                                                 transition: 'all 150ms ease-in-out',
-                                                border: 'none'
+                                                border: 'none',
+                                                fontSize: '14px'
                                             }}
                                         >
                                             {isProcessing ? 'Processing...' : `Pay ${PAYMENT_AMOUNT} SOL to Start`}
@@ -962,6 +996,38 @@ export default function HomePage() {
                         )}
                     </div>
                 </div>
+                
+                {/* SOL Price Display */}
+                {!isSessionStarted && (
+                    <div style={{
+                        width: '100%',
+                        maxWidth: '512px',
+                        marginTop: '16px',
+                        padding: '12px 32px', // Match the padding of the workout structure box
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '0.875rem',
+                        color: '#9ca3af'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <svg width="16" height="16" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M93.96 42.7298H34.9982C33.1632 42.7298 32.0038 44.7125 32.9491 46.3261L47.3651 70.9964H88.7795C90.0252 70.9964 91.0617 70.0088 91.0617 68.7631C91.0617 67.5174 90.0252 66.5298 88.7795 66.5298H50.2616L38.4002 46.5631H93.96C95.2057 46.5631 96.2422 45.5755 96.2422 44.3298C96.2422 43.0842 95.2057 42.0964 93.96 42.0964V42.7298Z" fill="#9945FF"/>
+                                <path d="M91.0617 54.0631H53.8241C51.9891 54.0631 50.8297 56.0458 51.775 57.6595L59.9034 71.6298H88.8929C90.1386 71.6298 91.1751 70.6422 91.1751 69.3965C91.1751 68.1508 90.1386 67.1632 88.8929 67.1632H62.8L57.2261 57.8964H91.0617C92.3074 57.8964 93.3439 56.9088 93.3439 55.6631C93.3439 54.4175 92.3074 53.4298 91.0617 53.4298V54.0631Z" fill="#9945FF"/>
+                                <path d="M32.2651 84.3134L46.6811 108.984H105.644C107.479 108.984 108.638 107.001 107.693 105.387L93.277 80.7167H34.3143C33.0686 80.7167 32.0321 81.7043 32.0321 82.95C32.0321 83.1867 32.1454 83.4234 32.2651 84.3134Z" fill="#14F195"/>
+                                <path d="M76.5658 96.6501H105.644C107.479 96.6501 108.638 94.6675 107.693 93.0538L99.6776 79.0835H70.6881C69.4424 79.0835 68.4059 80.0711 68.4059 81.3168C68.4059 82.5624 69.4424 83.5501 70.6881 83.5501H96.7811L102.355 92.8169H76.6791C75.4334 92.8169 74.3969 93.8045 74.3969 95.0502C74.3969 96.2958 75.4334 97.2835 76.6791 97.2835L76.5658 96.6501Z" fill="#14F195"/>
+                            </svg>
+                            <span>Current Solana Price:</span>
+                            <span style={{ fontWeight: '500', marginLeft: '4px' }}>
+                                {solPrice ? `$${solPrice.toFixed(2)} USD` : 'Loading...'}
+                            </span>
+                        </div>
+                        <span style={{ fontWeight: '500' }}>
+                            {solPrice && `Fee: $${(PAYMENT_AMOUNT * solPrice).toFixed(2)} USD`}
+                        </span>
+                    </div>
+                )}
             </main>
 
             {/* End Workout Confirmation Modal */}
@@ -1115,32 +1181,61 @@ export default function HomePage() {
             {/* Footer Section */}
             <footer style={{
                 width: '100%',
+                height: '128px', // Doubled from 64px
+                minHeight: '128px', // Doubled from 64px
                 borderTop: '1px solid rgba(31, 41, 55, 0.5)',
                 backgroundColor: '#000000',
-                backdropFilter: 'blur(4px)',
-                padding: '24px 0',
-                marginTop: 'auto'
+                position: 'relative',
+                bottom: 0,
+                left: 0,
+                right: 0
             }}>
                 <div style={{
                     width: '100%',
+                    height: '100%',
                     maxWidth: '1024px',
                     margin: '0 auto',
-                    padding: '0 24px',
-                    textAlign: 'center'
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0 24px'
                 }}>
                     <p style={{
                         fontFamily: 'var(--font-inter)',
                         color: '#6b7280',
-                        marginBottom: '12px'
+                        margin: 0,
+                        fontSize: '0.875rem',
+                        lineHeight: '1.4'
                     }}>
-                        © {new Date().getFullYear()} VO2Max Training App. All Rights Reserved.
+                        © {new Date().getFullYear()} Apps for Manlets.<br />
+                        All Rights Reserved.
                     </p>
-                    <Link href="/faq" style={{
-                        color: '#a78bfa',
-                        transition: 'color 150ms ease'
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        gap: '8px',
+                        marginRight: '30px' // Increased from 15px to 30px
                     }}>
-                        FAQ
-                    </Link>
+                        <Link href="/faq" style={{
+                            color: '#a78bfa',
+                            transition: 'color 150ms ease',
+                            textDecoration: 'none',
+                            fontSize: '0.875rem',
+                            whiteSpace: 'nowrap' // Prevent wrapping
+                        }}>
+                            FAQ
+                        </Link>
+                        <Link href="/feedback" style={{
+                            color: '#a78bfa',
+                            transition: 'color 150ms ease',
+                            textDecoration: 'none',
+                            fontSize: '0.875rem',
+                            whiteSpace: 'nowrap' // Prevent wrapping
+                        }}>
+                            Feedback
+                        </Link>
+                    </div>
                 </div>
             </footer>
         </div>
