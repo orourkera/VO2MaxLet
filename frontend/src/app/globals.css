@@ -41,7 +41,8 @@ body {
 @layer base {
   :root {
     /* Define Solana-inspired gradient colors */
-    --solana-grad-start: #0d013a;   /* Deeper blue/purple */
+    --solana-grad-start: #1a0f6c;   /* Brighter blue/purple */
+    --solana-grad-mid: #0d013a;     /* Original deep blue/purple */
     --solana-grad-end: #05010a;     /* Very dark purple/black */
     
     /* Default text colors for dark theme */
@@ -55,18 +56,53 @@ body {
     --accent-tertiary: #00a2ff;  /* Bright blue */
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-serif);
+  /* Set all headings to use Inter by default */
+  h1, h2, h3, h4, h5, h6, p, span, div, button, input {
+    font-family: var(--font-inter);
   }
 
   body {
     color: rgb(var(--foreground-rgb));
     /* Use a linear gradient matching the image */
-    background: linear-gradient(to bottom, var(--solana-grad-start) 0%, var(--solana-grad-end) 100%);
-    background-color: var(--solana-grad-end); /* Fallback color */
-    background-attachment: fixed; 
+    background: linear-gradient(to bottom, var(--solana-grad-start) 0%, var(--solana-grad-mid) 40%, var(--solana-grad-end) 100%);
+    background-color: var(--solana-grad-mid); /* Fallback color */
+    background-attachment: fixed;
     min-height: 100vh;
-    /* Ensure font is applied here or via layout.tsx */
-    /* font-family: var(--font-sans); /* Example if using Tailwind font variables */ 
+    font-family: var(--font-inter);
   }
+}
+
+/* Wallet Button Styling - Override the default wallet adapter button styles */
+.wallet-adapter-button {
+  border-radius: 12px !important; /* More rounded corners */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important; /* Add drop shadow */
+  transition: all 0.2s ease !important;
+  font-weight: 300 !important; /* Lighter font weight */
+}
+
+.wallet-adapter-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4) !important; /* Enhanced shadow on hover */
+}
+
+.wallet-adapter-button:active {
+  transform: translateY(1px) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important; /* Reduced shadow when clicked */
+}
+
+/* Style for the wallet dropdown */
+.wallet-adapter-dropdown {
+  transition: all 0.2s ease !important;
+}
+
+/* Style for the wallet dropdown menu items */
+.wallet-adapter-dropdown-list {
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+  overflow: hidden !important;
+}
+
+.wallet-adapter-dropdown-list-item {
+  border-radius: 8px !important;
+  margin: 4px !important;
 }
