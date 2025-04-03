@@ -24,27 +24,34 @@ export class SolanaPayService {
         };
     }
 
-    async verifyPayment(transactionHash: string, userId: string, appId: string, amount: number) {
+    async verifyPayment(transactionHash: string, paymentId: string) {
         try {
             // Get the transaction
             const transaction = await this.connection.getTransaction(transactionHash);
             
             if (!transaction) {
+                // Optionally: Could mark payment as failed if tx not found after a reasonable time
+                // await paymentService.failPaymentStatus(paymentId);
                 throw new Error('Transaction not found');
             }
 
             // Verify the transaction was successful
             if (!transaction.meta?.err) {
-                // Update payment status in database
-                await paymentService.updatePaymentStatus(transactionHash, 'completed');
+                // Update payment status in database using paymentId and the actual signature
+                await paymentService.updatePaymentStatus(paymentId, transactionHash);
                 return true;
             } else {
-                await paymentService.updatePaymentStatus(transactionHash, 'failed');
+                // Mark payment as failed using paymentId
+                await paymentService.failPaymentStatus(paymentId);
+                console.warn(`Transaction ${transactionHash} failed on-chain.`);
                 return false;
             }
         } catch (error) {
-            console.error('Error verifying payment:', error);
-            throw error;
+            console.error(`Error verifying payment for ID ${paymentId} and hash ${transactionHash}:`, error);
+            // Don't mark as failed here if the error is temporary (e.g., network issue)
+            // If the error is persistent (e.g., PGRST116 from updatePaymentStatus), 
+            // it implies the paymentId didn't exist, which shouldn't happen in normal flow.
+            throw error; // Re-throw to be handled by the route handler
         }
     }
 
@@ -62,7 +69,7 @@ export class SolanaPayService {
                 appId,
                 amount,
                 currency,
-                reference // Using reference as transaction hash initially
+                reference // Store reference initially
             );
 
             return {

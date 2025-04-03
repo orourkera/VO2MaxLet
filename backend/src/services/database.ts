@@ -58,6 +58,19 @@ export const appService = {
         
         if (error) throw error;
         return data;
+    },
+
+    async getAppByName(name: string) {
+        const { data, error } = await supabase
+            .from('applications')
+            .select('*')
+            .eq('name', name)
+            .maybeSingle();
+
+        if (error) {
+            throw error;
+        }
+        return data;
     }
 };
 
@@ -110,11 +123,26 @@ export const paymentService = {
         return data;
     },
 
-    async updatePaymentStatus(transactionHash: string, status: 'completed' | 'failed') {
+    async updatePaymentStatus(paymentId: string, signature: string) {
         const { data, error } = await supabase
             .from('payments')
-            .update({ status })
-            .eq('transaction_hash', transactionHash)
+            .update({
+                status: 'completed',
+                transaction_hash: signature
+            })
+            .eq('id', paymentId)
+            .select()
+            .single();
+        
+        if (error) throw error;
+        return data;
+    },
+
+    async failPaymentStatus(paymentId: string) {
+        const { data, error } = await supabase
+            .from('payments')
+            .update({ status: 'failed' })
+            .eq('id', paymentId)
             .select()
             .single();
         

@@ -1,24 +1,29 @@
+'use client';
+
 import { createClient } from '@supabase/supabase-js';
 import { FC, ReactNode, createContext, useContext } from 'react';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase environment variables');
+}
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+    },
+});
 
 interface SupabaseContextType {
     supabase: typeof supabase;
 }
 
-const SupabaseContext = createContext<SupabaseContextType | undefined>(undefined);
+const SupabaseContext = createContext<SupabaseContextType>({ supabase });
 
-export const useSupabase = () => {
-    const context = useContext(SupabaseContext);
-    if (!context) {
-        throw new Error('useSupabase must be used within a SupabaseProvider');
-    }
-    return context;
-};
+export const useSupabase = () => useContext(SupabaseContext);
 
 interface SupabaseProviderProps {
     children: ReactNode;
