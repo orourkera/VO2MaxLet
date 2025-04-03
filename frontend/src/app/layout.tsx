@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Source_Serif_4 } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import "../styles/external.css";
 import { SolanaProvider } from "@/providers/SolanaProvider";
@@ -10,13 +10,7 @@ const inter = Inter({
   subsets: ["latin"],
   display: 'swap',
   variable: '--font-inter',
-});
-
-const sourceSerif = Source_Serif_4({
-  subsets: ["latin"],
-  display: 'swap',
-  variable: '--font-serif',
-  weight: ['400', '500', '600', '700'],
+  weight: ['300', '400', '500', '600', '700']
 });
 
 export const metadata: Metadata = {
@@ -30,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${sourceSerif.variable}`}>
+    <html lang="en" className={inter.variable}>
       <body className="font-sans">
         <SupabaseProvider>
           <SolanaProvider>

@@ -8,6 +8,7 @@ import { CircularProgressTimer } from '@/components/CircularProgressTimer';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
 import Link from 'next/link';
+import { useSupabase } from '@/providers/SupabaseProvider';
 
 // Interface for structure stored in state (durations in minutes)
 interface EditableStructure {
@@ -70,7 +71,7 @@ const formatTime = (totalSeconds: number): string => {
 export default function HomePage() {
     const { user, loading, error } = useAuth();
     const [isSessionStarted, setIsSessionStarted] = useState(false);
-    const { publicKey, sendTransaction } = useWallet();
+    const { publicKey, sendTransaction, connected } = useWallet();
     const { connection } = useConnection();
     const [isProcessing, setIsProcessing] = useState(false);
     const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
@@ -95,6 +96,7 @@ export default function HomePage() {
         let interval: NodeJS.Timeout | undefined;
         
         if (isSessionStarted && !isPaused) {
+            // Update more frequently for smoother animation (200ms instead of 1000ms)
             interval = setInterval(() => {
                 // Update current time (for total timer)
                 setCurrentTime(Date.now());
@@ -102,9 +104,10 @@ export default function HomePage() {
                 // Only decrement phase timer if the TrainingTimer isn't updating it
                 // (This is a fallback, the phase updates should come from TrainingTimer)
                 if (currentPhaseTimeLeft > 0) {
-                    setCurrentPhaseTimeLeft(prev => Math.max(0, prev - 1));
+                    // Decrement by a smaller amount for smoother animation
+                    setCurrentPhaseTimeLeft(prev => Math.max(0, prev - 0.2));
                 }
-            }, 1000);
+            }, 200); // Update 5 times per second instead of once per second
         }
         
         return () => {
@@ -211,6 +214,7 @@ export default function HomePage() {
             const initialTime = editableStructure.warmup * 60;
             setCurrentPhase(initialPhase);
             setCurrentPhaseTimeLeft(initialTime);
+            setCurrentPhaseTotalDuration(initialTime);
             console.log('Setting initial phase data:', initialPhase, initialTime);
         } catch (error) {
             console.error('Payment error:', error);
@@ -219,15 +223,52 @@ export default function HomePage() {
         }
     };
 
-    const handleSessionComplete = () => {
+    const handleSessionComplete = async () => {
+        if (user && sessionStartTime !== null) {
+            try {
+                const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 1000);
+                const structure = convertStructureToSeconds(editableStructure);
+                
+                // Save workout as completed
+                const { error } = await supabase
+                    .from('training_sessions')
+                    .insert([{
+                        user_id: user.id,
+                        session_type: 'norwegian_vo2max',
+                        duration: sessionDuration,
+                        completed: true, // Fully completed workout
+                        warmup_duration: structure.warmup,
+                        high_intensity_duration: structure.highIntensity,
+                        recovery_duration: structure.recovery,
+                        cooldown_duration: structure.cooldown
+                    }]);
+
+                if (error) {
+                    console.error('Error recording completed training session:', error);
+                } else {
+                    console.log('Successfully saved completed workout data');
+                }
+            } catch (err) {
+                console.error('Failed to record completed session:', err);
+            }
+        }
+        
+        // Reset the state
         setIsSessionStarted(false);
-        setSessionStartTime(null); // Reset start time
+        setSessionStartTime(null);
+        setCurrentPhase('');
+        setCurrentPhaseTimeLeft(0);
+        setCurrentPhaseTotalDuration(0);
     };
 
     // Handlers for input changes
     const handleStructureChange = (e: ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        const intValue = parseInt(value, 10);
+        // Only allow numeric input
+        if (!/^\d*$/.test(value)) return;
+        
+        const intValue = value === '' ? 0 : parseInt(value, 10);
+        
         // Basic validation: ensure it's a non-negative number
         if (!isNaN(intValue) && intValue >= 0) { 
             setEditableStructure(prev => ({
@@ -245,28 +286,102 @@ export default function HomePage() {
     // Prepare structure in seconds for TrainingTimer prop
     const structureForTimer = useMemo(() => convertStructureToSeconds(editableStructure), [editableStructure]);
 
-    // Add a more robust handler function to track the current phase data
+    // Add a new state for tracking the current phase's total duration
+    const [currentPhaseTotalDuration, setCurrentPhaseTotalDuration] = useState<number>(0);
+    
+    // Update the phase change handler to track both current time and total phase duration
     const handlePhaseChange = (phaseName: string, timeLeft: number) => {
         console.log('Phase changed:', phaseName, 'Time left:', timeLeft);
+        
+        // Calculate total phase duration based on the phase name
+        let phaseTotalDuration = timeLeft; // Default to current time left
+        
+        // Look up the total duration for the phase based on its name
+        if (structureForTimer) {
+            switch(phaseName) {
+                case 'Warm-up':
+                    phaseTotalDuration = structureForTimer.warmup;
+                    break;
+                case 'High Intensity':
+                    phaseTotalDuration = structureForTimer.highIntensity;
+                    break;
+                case 'Recovery':
+                    phaseTotalDuration = structureForTimer.recovery;
+                    break;
+                case 'Cool-down':
+                    phaseTotalDuration = structureForTimer.cooldown;
+                    break;
+            }
+        }
         
         // Only update if values actually changed to prevent unnecessary re-renders
         if (phaseName !== currentPhase) {
             setCurrentPhase(phaseName);
         }
         
-        // Using a callback form to ensure we're always working with the latest state
+        // Update both time left and total duration
         setCurrentPhaseTimeLeft(timeLeft);
+        setCurrentPhaseTotalDuration(phaseTotalDuration);
     };
 
     // Add new state for the confirmation modal
     const [showEndWorkoutModal, setShowEndWorkoutModal] = useState(false);
 
+    // Import the Supabase hook
+    const { supabase } = useSupabase();
+    
+    // Track previous connection state to detect disconnects
+    const [wasConnected, setWasConnected] = useState(false);
+    
+    // Effect to detect wallet disconnection during active workout
+    useEffect(() => {
+        // If previously connected but now disconnected, and workout is in progress
+        if (wasConnected && !connected && isSessionStarted) {
+            console.log('Wallet disconnected during workout - prompting to save/discard');
+            // Show the end workout modal
+            setShowEndWorkoutModal(true);
+        }
+        
+        // Update previous connection state
+        setWasConnected(connected);
+    }, [connected, isSessionStarted, wasConnected]);
+
     // Function to handle ending workout early
-    const handleEndWorkoutEarly = (shouldSave: boolean) => {
-        if (shouldSave) {
+    const handleEndWorkoutEarly = async (shouldSave: boolean) => {
+        if (shouldSave && user && sessionStartTime !== null) {
             console.log('Saving workout data...');
-            // Here you would save the workout data to your database
-            // For now we'll just log it
+            
+            try {
+                // Calculate actual workout duration in seconds
+                const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 1000);
+                
+                // Calculate how much of each phase was completed
+                // This is an estimate based on the remaining time in the current phase
+                const phasesCompleted = calculateCompletedPhases(currentPhase, currentPhaseTimeLeft);
+                
+                // Save to database
+                const { error } = await supabase
+                    .from('training_sessions')
+                    .insert([{
+                        user_id: user.id,
+                        session_type: 'norwegian_vo2max',
+                        duration: sessionDuration,
+                        completed: false, // Marked as incomplete since it was ended early
+                        warmup_duration: phasesCompleted.warmup,
+                        high_intensity_duration: phasesCompleted.highIntensity,
+                        recovery_duration: phasesCompleted.recovery,
+                        cooldown_duration: phasesCompleted.cooldown,
+                        early_termination: true
+                    }]);
+
+                if (error) {
+                    console.error('Error recording training session:', error);
+                } else {
+                    console.log('Successfully saved workout data');
+                }
+            } catch (err) {
+                console.error('Failed to record training session:', err);
+            }
         } else {
             console.log('Discarding workout data...');
             // No need to save anything
@@ -277,7 +392,52 @@ export default function HomePage() {
         setSessionStartTime(null);
         setCurrentPhase('');
         setCurrentPhaseTimeLeft(0);
+        setCurrentPhaseTotalDuration(0);
         setShowEndWorkoutModal(false);
+    };
+    
+    // Helper function to calculate how much of each phase was completed
+    const calculateCompletedPhases = (currentPhaseName: string, currentTimeLeft: number): {
+        warmup: number;
+        highIntensity: number;
+        recovery: number;
+        cooldown: number;
+    } => {
+        const structure = convertStructureToSeconds(editableStructure);
+        const result = {
+            warmup: 0,
+            highIntensity: 0,
+            recovery: 0,
+            cooldown: 0
+        };
+        
+        // Mark previous phases as fully completed
+        switch (currentPhaseName) {
+            case 'Cool-down':
+                result.recovery = structure.recovery;
+                result.highIntensity = structure.highIntensity;
+                result.warmup = structure.warmup;
+                // For current phase, calculate time spent
+                result.cooldown = structure.cooldown - currentTimeLeft;
+                break;
+            case 'Recovery':
+                result.highIntensity = structure.highIntensity;
+                result.warmup = structure.warmup;
+                // For current phase, calculate time spent
+                result.recovery = structure.recovery - currentTimeLeft;
+                break;
+            case 'High Intensity':
+                result.warmup = structure.warmup;
+                // For current phase, calculate time spent
+                result.highIntensity = structure.highIntensity - currentTimeLeft;
+                break;
+            case 'Warm-up':
+                // For current phase, calculate time spent
+                result.warmup = structure.warmup - currentTimeLeft;
+                break;
+        }
+        
+        return result;
     };
 
     // Render the core UI regardless of connection status initially
@@ -287,7 +447,7 @@ export default function HomePage() {
             flexDirection: 'column',
             minHeight: '100vh',
             backgroundColor: '#0d013a',
-            backgroundImage: 'linear-gradient(to bottom, #0d013a 0%, #05010a 100%)',
+            backgroundImage: 'linear-gradient(to bottom, #1a0f6c 0%, #0d013a 40%, #05010a 100%)',
             color: '#e5e7eb',
             backgroundAttachment: 'fixed'
         }}>
@@ -329,9 +489,9 @@ export default function HomePage() {
                 }}>
                     {/* Title */}
                     <h1 style={{
-                        fontFamily: 'var(--font-serif)',
+                        fontFamily: 'var(--font-inter)',
                         fontSize: '2.5rem',
-                        fontWeight: '500',
+                        fontWeight: '300',
                         marginBottom: '8px',
                         color: '#ffffff',
                         letterSpacing: '0.08em'
@@ -352,6 +512,7 @@ export default function HomePage() {
                             currentPhaseTime={currentPhaseTimeLeft}
                             currentPhaseName={currentPhase}
                             showPhaseTime={isSessionStarted}
+                            currentPhaseTotalDuration={currentPhaseTotalDuration}
                         />
                         
                         {/* Pause Button - Below phase name in the circle */}
@@ -455,7 +616,7 @@ export default function HomePage() {
                                 border: '1px solid rgba(55, 65, 81, 0.5)'
                             }}>
                                 <h3 style={{
-                                    fontFamily: 'var(--font-serif)',
+                                    fontFamily: 'var(--font-inter)',
                                     fontSize: '1.25rem',
                                     fontWeight: '600',
                                     marginBottom: '24px',
@@ -483,23 +644,91 @@ export default function HomePage() {
                                         <label htmlFor="warmup" style={{ fontWeight: '500' }}>
                                             Warm-up (mins):
                                         </label>
-                                        <input 
-                                            type="number"
-                                            id="warmup"
-                                            name="warmup" 
-                                            value={editableStructure.warmup}
-                                            onChange={handleStructureChange}
-                                            min="0"
-                                            style={{
-                                                width: '96px',
-                                                padding: '8px',
-                                                border: '1px solid #4b5563',
-                                                borderRadius: '8px',
-                                                textAlign: 'right',
-                                                backgroundColor: 'rgba(55, 65, 81, 0.5)',
-                                                color: '#f3f4f6'
-                                            }}
-                                        />
+                                        <div style={{ 
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            position: 'relative'
+                                        }}>
+                                            <input 
+                                                type="text"
+                                                id="warmup"
+                                                name="warmup" 
+                                                value={editableStructure.warmup}
+                                                onChange={handleStructureChange}
+                                                style={{
+                                                    width: '60px',
+                                                    padding: '8px',
+                                                    paddingRight: '26px', // Make room for the carets
+                                                    border: '1px solid #4b5563',
+                                                    borderRadius: '8px',
+                                                    textAlign: 'center',
+                                                    backgroundColor: 'rgba(55, 65, 81, 0.5)',
+                                                    color: '#f3f4f6',
+                                                    appearance: 'none', // Hide default spinners
+                                                    MozAppearance: 'textfield' // Hide default spinners in Firefox
+                                                }}
+                                            />
+                                            <div style={{
+                                                position: 'absolute',
+                                                right: '8px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                height: '100%',
+                                                justifyContent: 'center',
+                                                gap: '2px'
+                                            }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setEditableStructure(prev => ({
+                                                            ...prev,
+                                                            warmup: prev.warmup + 1
+                                                        }));
+                                                    }}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: '#9ca3af',
+                                                        cursor: 'pointer',
+                                                        fontSize: '10px',
+                                                        lineHeight: '10px',
+                                                        padding: '0',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        height: '14px'
+                                                    }}
+                                                    aria-label="Increase warmup time"
+                                                >
+                                                    ▲
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setEditableStructure(prev => ({
+                                                            ...prev,
+                                                            warmup: Math.max(0, prev.warmup - 1)
+                                                        }));
+                                                    }}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: '#9ca3af',
+                                                        cursor: 'pointer',
+                                                        fontSize: '10px',
+                                                        lineHeight: '10px',
+                                                        padding: '0',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        height: '14px'
+                                                    }}
+                                                    aria-label="Decrease warmup time"
+                                                >
+                                                    ▼
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                     {/* Intervals (Fixed Display) */}
                                     <div style={{
@@ -517,18 +746,58 @@ export default function HomePage() {
                                             alignItems: 'center'
                                         }}>
                                             <span style={{
-                                                fontFamily: 'var(--font-serif)',
+                                                fontFamily: 'var(--font-inter)',
                                                 fontWeight: '500',
                                                 fontSize: '1.125rem'
                                             }}>
                                                 Intervals
                                             </span>
-                                            <span style={{
-                                                color: '#c084fc',
-                                                fontWeight: '500'
+                                            <div style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px'
                                             }}>
-                                                x{editableStructure.sets}
-                                            </span>
+                                                <span style={{ 
+                                                    color: '#c084fc',
+                                                    fontSize: '0.875rem',
+                                                    marginRight: '4px'
+                                                }}>
+                                                    Sets:
+                                                </span>
+                                                <select
+                                                    name="sets"
+                                                    id="sets"
+                                                    value={editableStructure.sets}
+                                                    onChange={(e) => {
+                                                        const value = parseInt(e.target.value, 10);
+                                                        setEditableStructure(prev => ({
+                                                            ...prev,
+                                                            sets: value
+                                                        }));
+                                                    }}
+                                                    style={{
+                                                        backgroundColor: 'rgba(55, 65, 81, 0.7)',
+                                                        color: '#c084fc',
+                                                        border: '1px solid #4b5563',
+                                                        borderRadius: '6px',
+                                                        padding: '4px 8px',
+                                                        fontSize: '0.875rem',
+                                                        fontWeight: '500',
+                                                        appearance: 'none',
+                                                        paddingRight: '24px', // Make room for the custom arrow
+                                                        backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23c084fc%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")',
+                                                        backgroundRepeat: 'no-repeat',
+                                                        backgroundPosition: 'right 8px center',
+                                                        backgroundSize: '8px 8px',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    {/* Generate options from 1 to 10 */}
+                                                    {Array.from({ length: 10 }, (_, i) => i + 1).map(num => (
+                                                        <option key={num} value={num}>{num}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                         </div>
                                         <div style={{
                                             display: 'flex',
@@ -557,23 +826,91 @@ export default function HomePage() {
                                         <label htmlFor="cooldown" style={{ fontWeight: '500' }}>
                                             Cool-down (mins):
                                         </label>
-                                        <input 
-                                            type="number"
-                                            id="cooldown"
-                                            name="cooldown"
-                                            value={editableStructure.cooldown}
-                                            onChange={handleStructureChange}
-                                            min="0"
-                                            style={{
-                                                width: '96px',
-                                                padding: '8px',
-                                                border: '1px solid #4b5563',
-                                                borderRadius: '8px',
-                                                textAlign: 'right',
-                                                backgroundColor: 'rgba(55, 65, 81, 0.5)',
-                                                color: '#f3f4f6'
-                                            }}
-                                        />
+                                        <div style={{ 
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            position: 'relative'
+                                        }}>
+                                            <input 
+                                                type="text"
+                                                id="cooldown"
+                                                name="cooldown"
+                                                value={editableStructure.cooldown}
+                                                onChange={handleStructureChange}
+                                                style={{
+                                                    width: '60px',
+                                                    padding: '8px',
+                                                    paddingRight: '26px', // Make room for the carets
+                                                    border: '1px solid #4b5563',
+                                                    borderRadius: '8px',
+                                                    textAlign: 'center',
+                                                    backgroundColor: 'rgba(55, 65, 81, 0.5)',
+                                                    color: '#f3f4f6',
+                                                    appearance: 'none', // Hide default spinners
+                                                    MozAppearance: 'textfield' // Hide default spinners in Firefox
+                                                }}
+                                            />
+                                            <div style={{
+                                                position: 'absolute',
+                                                right: '8px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                height: '100%',
+                                                justifyContent: 'center',
+                                                gap: '2px'
+                                            }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setEditableStructure(prev => ({
+                                                            ...prev,
+                                                            cooldown: prev.cooldown + 1
+                                                        }));
+                                                    }}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: '#9ca3af',
+                                                        cursor: 'pointer',
+                                                        fontSize: '10px',
+                                                        lineHeight: '10px',
+                                                        padding: '0',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        height: '14px'
+                                                    }}
+                                                    aria-label="Increase cooldown time"
+                                                >
+                                                    ▲
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setEditableStructure(prev => ({
+                                                            ...prev,
+                                                            cooldown: Math.max(0, prev.cooldown - 1)
+                                                        }));
+                                                    }}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: '#9ca3af',
+                                                        cursor: 'pointer',
+                                                        fontSize: '10px',
+                                                        lineHeight: '10px',
+                                                        padding: '0',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        height: '14px'
+                                                    }}
+                                                    aria-label="Decrease cooldown time"
+                                                >
+                                                    ▼
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <p style={{
@@ -638,6 +975,7 @@ export default function HomePage() {
                             const initialTime = editableStructure.warmup * 60;
                             setCurrentPhase(initialPhase);
                             setCurrentPhaseTimeLeft(initialTime);
+                            setCurrentPhaseTotalDuration(initialTime);
                             console.log('Setting initial phase data:', initialPhase, initialTime);
                         }}
                         style={{
@@ -686,7 +1024,7 @@ export default function HomePage() {
                             fontWeight: '600',
                             marginBottom: '16px',
                             color: 'white',
-                            fontFamily: 'var(--font-serif)',
+                            fontFamily: 'var(--font-inter)',
                             textAlign: 'center'
                         }}>
                             End Workout?
@@ -822,7 +1160,7 @@ export default function HomePage() {
                     textAlign: 'center'
                 }}>
                     <p style={{
-                        fontFamily: 'var(--font-serif)',
+                        fontFamily: 'var(--font-inter)',
                         color: '#6b7280',
                         marginBottom: '12px'
                     }}>

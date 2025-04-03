@@ -15,6 +15,7 @@ interface CircularProgressTimerProps {
     currentPhaseTime?: number;    // Current phase time remaining in seconds
     currentPhaseName?: string;    // Name of current phase
     showPhaseTime?: boolean;      // Whether to show phase time instead of total time
+    currentPhaseTotalDuration?: number; // Total duration of current phase for progress calculation
 }
 
 // Helper function to format time (can be reused or imported)
@@ -46,7 +47,8 @@ export const CircularProgressTimer: React.FC<CircularProgressTimerProps> = ({
     // Phase timing props with defaults
     currentPhaseTime = 0,
     currentPhaseName = '',
-    showPhaseTime = false
+    showPhaseTime = false,
+    currentPhaseTotalDuration = 0
 }) => {
     if (totalDuration <= 0) return null; 
 
@@ -72,25 +74,37 @@ export const CircularProgressTimer: React.FC<CircularProgressTimerProps> = ({
     
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
-    const progress = Math.max(0, Math.min(1, remainingTime / totalDuration));
+    
+    // Calculate progress for the circle
+    let progress: number;
+    
+    if (showPhaseTime && currentPhaseTotalDuration > 0) {
+        // When showing phase time, use phase-specific progress 
+        // The progress should go from 1 (full circle) to 0 (empty circle) as the phase progresses
+        progress = Math.max(0, Math.min(1, currentPhaseTime / currentPhaseTotalDuration));
+        
+        // Apply some easing to make the progress feel more natural
+        // This helps smooth out the transition near the ends
+        // progress = Math.pow(progress, 0.9); // Optional: subtle easing effect
+    } else {
+        // Fallback to total progress
+        progress = Math.max(0, Math.min(1, remainingTime / totalDuration));
+    }
 
     // Determine what time to display in the timer
     const displayTime = showPhaseTime && currentPhaseTime > 0 
         ? formatTime(currentPhaseTime) 
         : formatTime(remainingTime);
 
-    // When showing phase time, we want progress to be based on that phase
-    // But we need to know the total phase duration, which we don't have
-    // For now, just use the phase time for the circle when showing phase time
-    const effectiveProgress = progress; // Default to total progress
-
-    // Calculate the offset based on the appropriate progress
-    const offset = circumference - effectiveProgress * circumference;
+    // Calculate the offset based on progress
+    const offset = circumference - progress * circumference;
 
     console.log('CircularProgressTimer rendering:', { 
         showPhaseTime, 
         currentPhaseTime, 
         currentPhaseName,
+        currentPhaseTotalDuration,
+        progress,
         displayTime
     });
 
@@ -114,12 +128,12 @@ export const CircularProgressTimer: React.FC<CircularProgressTimerProps> = ({
                 strokeWidth={strokeWidth}
                 fill="none"
                 strokeLinecap="round"
-                // Apply color via inline style, keep transition class
-                className={"transition-[stroke-dashoffset] duration-300 ease-linear"}
+                // Apply color via inline style, improve transition
                 style={{
                     stroke: phaseColor,
                     strokeDasharray: circumference,
                     strokeDashoffset: offset,
+                    transition: 'stroke-dashoffset 0.9s ease-in-out, stroke 0.6s ease'
                 }}
             />
             {/* Time Text */}
@@ -132,8 +146,8 @@ export const CircularProgressTimer: React.FC<CircularProgressTimerProps> = ({
                 style={{ 
                     fontSize: `${size * 0.18}px`,
                     fill: textColorValue, // Use fill for SVG text
-                    fontFamily: "var(--font-serif)",
-                    fontWeight: "500" // Make the time a bit lighter weight
+                    fontFamily: "var(--font-inter)",
+                    fontWeight: "300" // Lighter weight for consistency
                 }} 
                 // Keep other utility classes
                 className={`transform rotate-90 origin-center`} 
@@ -150,8 +164,9 @@ export const CircularProgressTimer: React.FC<CircularProgressTimerProps> = ({
                     style={{ 
                         fontSize: `${size * 0.08}px`,
                         fill: textColorValue,
-                        fontFamily: "var(--font-serif)",
+                        fontFamily: "var(--font-inter)",
                         fontWeight: "300", // Make this lighter for hierarchy
+                        letterSpacing: "0.05em",
                         opacity: 0.8 // Slightly transparent
                     }} 
                     className={`transform rotate-90 origin-center`} 

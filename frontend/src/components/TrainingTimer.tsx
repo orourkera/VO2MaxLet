@@ -36,13 +36,11 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({
         if (!isPaused && phase !== 'complete') {
             interval = setInterval(() => {
                 setTimeLeft((prev) => {
-                    if (prev <= 1) {
-                        // Move to next phase
+                    if (prev <= 0.2) {
                         switch (phase) {
                             case 'warmup':
                                 setPhase('highIntensity');
                                 const highIntensityTime = structure.highIntensity;
-                                // Make sure we call onPhaseChange with updated values
                                 if (onPhaseChange) {
                                     onPhaseChange('High Intensity', highIntensityTime);
                                 }
@@ -70,9 +68,9 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({
                                 return prev;
                         }
                     }
-                    return prev - 1;
+                    return Math.max(0, prev - 0.2);
                 });
-            }, 1000);
+            }, 200);
         }
 
         return () => clearInterval(interval);
@@ -167,7 +165,7 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({
                     fontSize: '1.5rem',
                     fontWeight: 'bold',
                     marginBottom: '1rem',
-                    fontFamily: 'var(--font-serif)', 
+                    fontFamily: 'var(--font-inter)', 
                     color: '#f3f4f6'
                 }}>
                     Workout Complete!
@@ -213,9 +211,9 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({
             }}>
                 <h2 style={{
                     fontSize: '1.5rem',
-                    fontWeight: 'bold',
+                    fontWeight: '500',
                     marginBottom: '0.5rem',
-                    fontFamily: 'var(--font-serif)'
+                    fontFamily: 'var(--font-inter)'
                 }}>
                     {phaseInfo.name}
                 </h2>
@@ -226,9 +224,9 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({
                 </p>
                 <div style={{
                     fontSize: '3rem',
-                    fontWeight: 'bold',
+                    fontWeight: '300',
                     marginBottom: '1rem',
-                    fontFamily: 'var(--font-serif)'
+                    fontFamily: 'var(--font-inter)'
                 }}>
                     {formatTime(timeLeft)}
                 </div>
