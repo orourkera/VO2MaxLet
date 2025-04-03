@@ -7,9 +7,6 @@ import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { clusterApiUrl } from '@solana/web3.js';
 
-// Import the styles
-import '@solana/wallet-adapter-react-ui/styles.css';
-
 interface SolanaProviderProps {
     children: ReactNode;
 }
