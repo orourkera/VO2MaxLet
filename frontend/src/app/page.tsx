@@ -489,7 +489,7 @@ export default function HomePage() {
                 }}>
                     {/* Title */}
                     <h1 style={{
-                        fontFamily: 'var(--font-inter)',
+                        fontFamily: 'var(--font-merriweather)',
                         fontSize: '2.5rem',
                         fontWeight: '300',
                         marginBottom: '8px',
@@ -913,87 +913,47 @@ export default function HomePage() {
                                         </div>
                                     </div>
                                 </div>
-                                <p style={{
-                                    textAlign: 'center',
-                                    color: '#9ca3af',
-                                    marginTop: '24px',
-                                    fontSize: '0.875rem'
-                                }}>
-                                    Connect wallet and click 'Start' to begin your session.
-                                </p>
+                                {!publicKey && (
+                                    <p style={{
+                                        textAlign: 'center',
+                                        color: '#9ca3af',
+                                        marginTop: '24px',
+                                        fontSize: '0.875rem'
+                                    }}>
+                                        Connect wallet and click 'Start' to begin your session.
+                                    </p>
+                                )}
+                                {user && !isSessionStarted && (
+                                    <div style={{
+                                        marginTop: '24px',
+                                        display: 'flex',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <button
+                                            onClick={handlePayment}
+                                            disabled={isProcessing || !publicKey}
+                                            style={{
+                                                background: 'linear-gradient(to right, #8b5cf6, #3b82f6)',
+                                                color: 'white',
+                                                fontWeight: 'bold',
+                                                padding: '12px 24px',
+                                                borderRadius: '8px',
+                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.2)',
+                                                opacity: (isProcessing || !publicKey) ? '0.5' : '1',
+                                                cursor: (isProcessing || !publicKey) ? 'not-allowed' : 'pointer',
+                                                transition: 'all 150ms ease-in-out',
+                                                border: 'none'
+                                            }}
+                                        >
+                                            {isProcessing ? 'Processing...' : `Pay ${PAYMENT_AMOUNT} SOL to Start`}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
                 </div>
             </main>
-
-            {/* Conditional Pay/Start Button */}
-            {user && !isSessionStarted && (
-                <div style={{
-                    position: 'fixed',
-                    bottom: '32px',
-                    right: '32px',
-                    zIndex: 10
-                }}>
-                    <button
-                        onClick={handlePayment}
-                        disabled={isProcessing || !publicKey}
-                        style={{
-                            background: 'linear-gradient(to right, #8b5cf6, #3b82f6)',
-                            color: 'white',
-                            fontWeight: 'bold',
-                            padding: '12px 24px',
-                            borderRadius: '8px',
-                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.2)',
-                            opacity: (isProcessing || !publicKey) ? '0.5' : '1',
-                            cursor: (isProcessing || !publicKey) ? 'not-allowed' : 'pointer',
-                            transition: 'all 150ms ease-in-out',
-                            border: 'none'
-                        }}
-                    >
-                        {isProcessing ? 'Processing...' : `Pay ${PAYMENT_AMOUNT} SOL to Start`}
-                    </button>
-                </div>
-            )}
-
-            {/* Test button that doesn't depend on user state */}
-            {!isSessionStarted && (
-                <div style={{
-                    position: 'fixed',
-                    bottom: '32px',
-                    left: '32px',
-                    zIndex: 10
-                }}>
-                    <button
-                        onClick={() => {
-                            setSessionStartTime(Date.now());
-                            setCurrentTime(Date.now());
-                            setIsSessionStarted(true);
-                            
-                            // Initialize phase data for immediate display
-                            const initialPhase = 'Warm-up';
-                            const initialTime = editableStructure.warmup * 60;
-                            setCurrentPhase(initialPhase);
-                            setCurrentPhaseTimeLeft(initialTime);
-                            setCurrentPhaseTotalDuration(initialTime);
-                            console.log('Setting initial phase data:', initialPhase, initialTime);
-                        }}
-                        style={{
-                            background: 'linear-gradient(to right, #10b981, #059669)',
-                            color: 'white',
-                            fontWeight: 'bold',
-                            padding: '12px 24px',
-                            borderRadius: '8px',
-                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.2)',
-                            cursor: 'pointer',
-                            transition: 'all 150ms ease-in-out',
-                            border: 'none'
-                        }}
-                    >
-                        Test: Start Timer
-                    </button>
-                </div>
-            )}
 
             {/* End Workout Confirmation Modal */}
             {showEndWorkoutModal && (
@@ -1147,7 +1107,7 @@ export default function HomePage() {
             <footer style={{
                 width: '100%',
                 borderTop: '1px solid rgba(31, 41, 55, 0.5)',
-                backgroundColor: 'rgba(17, 24, 39, 0.5)',
+                backgroundColor: '#000000',
                 backdropFilter: 'blur(4px)',
                 padding: '24px 0',
                 marginTop: 'auto'

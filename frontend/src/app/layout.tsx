@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Merriweather } from "next/font/google";
 import "./globals.css";
 import "../styles/external.css";
 import { SolanaProvider } from "@/providers/SolanaProvider";
@@ -13,6 +13,13 @@ const inter = Inter({
   weight: ['300', '400', '500', '600', '700']
 });
 
+const merriweather = Merriweather({
+  subsets: ["latin"],
+  display: 'swap',
+  variable: '--font-merriweather',
+  weight: ['300', '400', '700']
+});
+
 export const metadata: Metadata = {
   title: "VO2 Max Training",
   description: "Norwegian-style VO2 max training sessions",
@@ -24,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${merriweather.variable}`}>
       <body className="font-sans">
         <SupabaseProvider>
           <SolanaProvider>
