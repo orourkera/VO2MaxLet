@@ -50,6 +50,23 @@ const WalletMultiButton = dynamic(
     { ssr: false }
 );
 
+// Add this function near the top of the file with the other utility functions
+const formatTime = (totalSeconds: number): string => {
+    if (totalSeconds < 0) totalSeconds = 0;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    const parts: string[] = [];
+    if (hours > 0) {
+        parts.push(hours.toString().padStart(2, '0'));
+    }
+    parts.push(minutes.toString().padStart(2, '0'));
+    parts.push(seconds.toString().padStart(2, '0'));
+    
+    return parts.join(':');
+};
+
 export default function HomePage() {
     const { user, loading, error } = useAuth();
     const [isSessionStarted, setIsSessionStarted] = useState(false);
@@ -68,15 +85,33 @@ export default function HomePage() {
         return calculateTotalDuration(structureInSeconds);
     }, [editableStructure]);
 
+    // Add new state variables at the top of the HomePage component
+    const [currentPhase, setCurrentPhase] = useState<string>('');
+    const [currentPhaseTimeLeft, setCurrentPhaseTimeLeft] = useState<number>(0);
+    const [isPaused, setIsPaused] = useState(false);
+
+    // Single consolidated timer effect that handles both total time and phase time
     useEffect(() => {
-        let timerInterval: NodeJS.Timeout | undefined;
-        if (isSessionStarted && sessionStartTime !== null) {
-            timerInterval = setInterval(() => {
+        let interval: NodeJS.Timeout | undefined;
+        
+        if (isSessionStarted && !isPaused) {
+            interval = setInterval(() => {
+                // Update current time (for total timer)
                 setCurrentTime(Date.now());
+                
+                // Only decrement phase timer if the TrainingTimer isn't updating it
+                // (This is a fallback, the phase updates should come from TrainingTimer)
+                if (currentPhaseTimeLeft > 0) {
+                    setCurrentPhaseTimeLeft(prev => Math.max(0, prev - 1));
+                }
             }, 1000);
         }
-        return () => clearInterval(timerInterval); // Cleanup on unmount or when session stops
-    }, [isSessionStarted, sessionStartTime]);
+        
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    // Explicitly include all dependencies to ensure array size doesn't change
+    }, [isSessionStarted, isPaused, sessionStartTime, currentPhaseTimeLeft]);
 
     const handlePayment = async () => {
         if (!publicKey || !sendTransaction || !user) {
@@ -170,6 +205,13 @@ export default function HomePage() {
             setSessionStartTime(Date.now()); // Set start time when payment succeeds
             setCurrentTime(Date.now()); // Ensure current time is updated immediately
             setIsSessionStarted(true);
+            
+            // Initialize phase data for immediate display
+            const initialPhase = 'Warm-up';
+            const initialTime = editableStructure.warmup * 60;
+            setCurrentPhase(initialPhase);
+            setCurrentPhaseTimeLeft(initialTime);
+            console.log('Setting initial phase data:', initialPhase, initialTime);
         } catch (error) {
             console.error('Payment error:', error);
         } finally {
@@ -203,6 +245,41 @@ export default function HomePage() {
     // Prepare structure in seconds for TrainingTimer prop
     const structureForTimer = useMemo(() => convertStructureToSeconds(editableStructure), [editableStructure]);
 
+    // Add a more robust handler function to track the current phase data
+    const handlePhaseChange = (phaseName: string, timeLeft: number) => {
+        console.log('Phase changed:', phaseName, 'Time left:', timeLeft);
+        
+        // Only update if values actually changed to prevent unnecessary re-renders
+        if (phaseName !== currentPhase) {
+            setCurrentPhase(phaseName);
+        }
+        
+        // Using a callback form to ensure we're always working with the latest state
+        setCurrentPhaseTimeLeft(timeLeft);
+    };
+
+    // Add new state for the confirmation modal
+    const [showEndWorkoutModal, setShowEndWorkoutModal] = useState(false);
+
+    // Function to handle ending workout early
+    const handleEndWorkoutEarly = (shouldSave: boolean) => {
+        if (shouldSave) {
+            console.log('Saving workout data...');
+            // Here you would save the workout data to your database
+            // For now we'll just log it
+        } else {
+            console.log('Discarding workout data...');
+            // No need to save anything
+        }
+        
+        // In either case, we end the workout
+        setIsSessionStarted(false);
+        setSessionStartTime(null);
+        setCurrentPhase('');
+        setCurrentPhaseTimeLeft(0);
+        setShowEndWorkoutModal(false);
+    };
+
     // Render the core UI regardless of connection status initially
     return (
         <div style={{
@@ -217,13 +294,13 @@ export default function HomePage() {
             {/* Top section: Header space + Wallet Button */}
             <header style={{
                 position: 'relative',
-                height: '80px',
+                height: '60px',
                 borderBottom: '1px solid rgba(31, 41, 55, 0.5)',
                 backdropFilter: 'blur(4px)'
             }}>
                 <div style={{
                     position: 'absolute',
-                    top: '16px',
+                    top: '12px',
                     right: '16px',
                     zIndex: 10
                 }}>
@@ -238,7 +315,7 @@ export default function HomePage() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '48px 24px'
+                padding: '24px 24px 48px'
             }}>
                 {/* Container for centered content */}
                 <div style={{
@@ -271,25 +348,103 @@ export default function HomePage() {
                             strokeWidth={24}
                             trackColorValue={'#1f2937'} 
                             progressColorValue={'#14f195'} 
-                            textColorValue={'#f3f4f6'} 
+                            textColorValue={'#f3f4f6'}
+                            currentPhaseTime={currentPhaseTimeLeft}
+                            currentPhaseName={currentPhase}
+                            showPhaseTime={isSessionStarted}
                         />
+                        
+                        {/* Pause Button - Below phase name in the circle */}
+                        {isSessionStarted && (
+                            <div style={{ 
+                                position: 'absolute', 
+                                left: '50%', 
+                                top: '45%',
+                                transform: 'translateX(-50%)',
+                                zIndex: 20
+                            }}>
+                                <button
+                                    onClick={() => setIsPaused(!isPaused)}
+                                    style={{
+                                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '50%',
+                                        width: '60px',
+                                        height: '60px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        transition: 'background-color 150ms ease',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.4)'
+                                    }}
+                                    aria-label={isPaused ? "Resume" : "Pause"}
+                                >
+                                    {/* Pause/Play Icon */}
+                                    {isPaused ? (
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M8 5v14l11-7z" />
+                                        </svg>
+                                    ) : (
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                                        </svg>
+                                    )}
+                                </button>
+                            </div>
+                        )}
+                        
                         <p style={{
+                            fontFamily: 'var(--font-inter)',
                             fontSize: '1.125rem',
-                            color: '#9ca3af',
+                            color: '#ffffff',
                             marginTop: '24px',
-                            fontWeight: '500'
+                            fontWeight: '300',
+                            letterSpacing: '0.05em'
                         }}>
-                            {isSessionStarted ? 'Total Time Remaining' : 'Total Workout Duration'}
+                            {isSessionStarted ? 'Total Remaining: ' + formatTime(displayRemainingTime) : 'Total Workout Duration'}
                         </p>
+                        
+                        {/* End Workout Button - Below total remaining time */}
+                        {isSessionStarted && (
+                            <div style={{
+                                marginTop: '71px'
+                            }}>
+                                <button
+                                    onClick={() => setShowEndWorkoutModal(true)}
+                                    style={{
+                                        backgroundColor: 'rgba(220, 38, 38, 0.8)', // Semi-transparent red
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        padding: '12px 24px',
+                                        fontSize: '1rem',
+                                        fontWeight: '500',
+                                        cursor: 'pointer',
+                                        transition: 'background-color 150ms ease',
+                                        fontFamily: 'var(--font-inter)',
+                                        letterSpacing: '0.02em',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+                                    }}
+                                >
+                                    End Workout
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {/* Conditional: Show Phase Timer OR Workout Structure Display */}
                     <div style={{ width: '100%', maxWidth: '512px', marginTop: '32px' }}>
                         {isSessionStarted ? (
-                            <TrainingTimer 
-                                structure={structureForTimer} 
-                                onComplete={handleSessionComplete}
-                            />
+                            <div style={{ display: 'none' }}>
+                                <TrainingTimer 
+                                    structure={structureForTimer} 
+                                    onComplete={handleSessionComplete}
+                                    onPhaseChange={handlePhaseChange}
+                                    isPaused={isPaused}
+                                />
+                            </div>
                         ) : (
                             <div style={{
                                 backgroundColor: 'rgba(31, 41, 55, 0.5)',
@@ -464,6 +619,151 @@ export default function HomePage() {
                 </div>
             )}
 
+            {/* Test button that doesn't depend on user state */}
+            {!isSessionStarted && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '32px',
+                    left: '32px',
+                    zIndex: 10
+                }}>
+                    <button
+                        onClick={() => {
+                            setSessionStartTime(Date.now());
+                            setCurrentTime(Date.now());
+                            setIsSessionStarted(true);
+                            
+                            // Initialize phase data for immediate display
+                            const initialPhase = 'Warm-up';
+                            const initialTime = editableStructure.warmup * 60;
+                            setCurrentPhase(initialPhase);
+                            setCurrentPhaseTimeLeft(initialTime);
+                            console.log('Setting initial phase data:', initialPhase, initialTime);
+                        }}
+                        style={{
+                            background: 'linear-gradient(to right, #10b981, #059669)',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            padding: '12px 24px',
+                            borderRadius: '8px',
+                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.2)',
+                            cursor: 'pointer',
+                            transition: 'all 150ms ease-in-out',
+                            border: 'none'
+                        }}
+                    >
+                        Test: Start Timer
+                    </button>
+                </div>
+            )}
+
+            {/* End Workout Confirmation Modal */}
+            {showEndWorkoutModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 50,
+                    backdropFilter: 'blur(4px)'
+                }}>
+                    <div style={{
+                        backgroundColor: '#111827', // Dark gray background
+                        borderRadius: '12px',
+                        padding: '24px',
+                        maxWidth: '90%',
+                        width: '400px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
+                        border: '1px solid rgba(75, 85, 99, 0.4)'
+                    }}>
+                        <h3 style={{
+                            fontSize: '1.5rem',
+                            fontWeight: '600',
+                            marginBottom: '16px',
+                            color: 'white',
+                            fontFamily: 'var(--font-serif)',
+                            textAlign: 'center'
+                        }}>
+                            End Workout?
+                        </h3>
+                        <p style={{
+                            fontSize: '1rem',
+                            color: '#9ca3af',
+                            marginBottom: '24px',
+                            textAlign: 'center',
+                            fontFamily: 'var(--font-inter)'
+                        }}>
+                            Do you want to save your progress or discard this workout?
+                        </p>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: '12px'
+                        }}>
+                            <button
+                                onClick={() => setShowEndWorkoutModal(false)}
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    color: '#9ca3af',
+                                    border: '1px solid #374151',
+                                    borderRadius: '8px',
+                                    padding: '10px 16px',
+                                    fontSize: '0.875rem',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                    transition: 'all 150ms ease',
+                                    flex: '1',
+                                    fontFamily: 'var(--font-inter)'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleEndWorkoutEarly(false)}
+                                style={{
+                                    backgroundColor: '#4b5563', // Gray
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: '10px 16px',
+                                    fontSize: '0.875rem',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                    transition: 'all 150ms ease',
+                                    flex: '1',
+                                    fontFamily: 'var(--font-inter)'
+                                }}
+                            >
+                                Discard
+                            </button>
+                            <button
+                                onClick={() => handleEndWorkoutEarly(true)}
+                                style={{
+                                    backgroundColor: '#14b8a6', // Teal
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: '10px 16px',
+                                    fontSize: '0.875rem',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                    transition: 'all 150ms ease',
+                                    flex: '1',
+                                    fontFamily: 'var(--font-inter)'
+                                }}
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Loading/Error Overlays */}
             {loading && (
                 <div style={{
@@ -488,7 +788,7 @@ export default function HomePage() {
             {error && !loading && (
                 <div style={{
                     position: 'fixed',
-                    top: '80px',
+                    top: '60px',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     backgroundColor: 'rgba(127, 29, 29, 0.9)',

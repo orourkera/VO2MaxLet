@@ -12,16 +12,22 @@ interface TrainingTimerProps {
         cooldown: number;
     };
     onComplete: () => void;
+    onPhaseChange?: (phaseName: string, timeLeft: number) => void;
+    isPaused?: boolean;
 }
 
 type Phase = 'warmup' | 'highIntensity' | 'recovery' | 'cooldown' | 'complete';
 
-export const TrainingTimer: FC<TrainingTimerProps> = ({ structure, onComplete }) => {
+export const TrainingTimer: FC<TrainingTimerProps> = ({ 
+    structure, 
+    onComplete, 
+    onPhaseChange,
+    isPaused = false // Default to not paused
+}) => {
     const { supabase } = useSupabase();
     const { user } = useAuth();
     const [phase, setPhase] = useState<Phase>('warmup');
     const [timeLeft, setTimeLeft] = useState(structure.warmup);
-    const [isPaused, setIsPaused] = useState(false);
     const [sessionStartTime] = useState(new Date());
 
     useEffect(() => {
@@ -35,13 +41,26 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({ structure, onComplete })
                         switch (phase) {
                             case 'warmup':
                                 setPhase('highIntensity');
-                                return structure.highIntensity;
+                                const highIntensityTime = structure.highIntensity;
+                                // Make sure we call onPhaseChange with updated values
+                                if (onPhaseChange) {
+                                    onPhaseChange('High Intensity', highIntensityTime);
+                                }
+                                return highIntensityTime;
                             case 'highIntensity':
                                 setPhase('recovery');
-                                return structure.recovery;
+                                const recoveryTime = structure.recovery;
+                                if (onPhaseChange) {
+                                    onPhaseChange('Recovery', recoveryTime);
+                                }
+                                return recoveryTime;
                             case 'recovery':
                                 setPhase('cooldown');
-                                return structure.cooldown;
+                                const cooldownTime = structure.cooldown;
+                                if (onPhaseChange) {
+                                    onPhaseChange('Cool-down', cooldownTime);
+                                }
+                                return cooldownTime;
                             case 'cooldown':
                                 setPhase('complete');
                                 handleSessionComplete();
@@ -57,7 +76,15 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({ structure, onComplete })
         }
 
         return () => clearInterval(interval);
-    }, [phase, isPaused, structure, onComplete]);
+    }, [phase, isPaused, structure, onComplete, onPhaseChange]);
+
+    useEffect(() => {
+        if (onPhaseChange && phase !== 'complete') {
+            const phaseInfo = getPhaseInfo();
+            console.log('Calling onPhaseChange with:', phaseInfo.name, timeLeft);
+            onPhaseChange(phaseInfo.name, timeLeft);
+        }
+    }, [phase, timeLeft, onPhaseChange]);
 
     const handleSessionComplete = async () => {
         if (!user) return;
@@ -98,31 +125,31 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({ structure, onComplete })
                 return {
                     name: 'Warm-up',
                     description: 'Zone 2 - Light intensity, you should be able to hold a conversation',
-                    color: 'bg-yellow-500'
+                    color: '#eab308' // yellow-500
                 };
             case 'highIntensity':
                 return {
                     name: 'High Intensity',
                     description: 'Zone 5 - Maximum effort, this should feel very hard',
-                    color: 'bg-red-500'
+                    color: '#ef4444' // red-500
                 };
             case 'recovery':
                 return {
                     name: 'Recovery',
                     description: 'Zone 2 - Light intensity, focus on recovery',
-                    color: 'bg-green-500'
+                    color: '#22c55e' // green-500
                 };
             case 'cooldown':
                 return {
                     name: 'Cool-down',
                     description: 'Zone 2 - Light intensity, gradually reduce effort',
-                    color: 'bg-blue-500'
+                    color: '#3b82f6' // blue-500
                 };
             default:
                 return {
                     name: 'Complete',
                     description: 'Great work! You\'ve completed your session.',
-                    color: 'bg-purple-500'
+                    color: '#a855f7' // purple-500
                 };
         }
     };
@@ -131,12 +158,40 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({ structure, onComplete })
 
     if (phase === 'complete') {
         return (
-            <div className="max-w-md mx-auto text-center">
-                <h2 className="text-2xl font-bold mb-4">Workout Complete!</h2>
-                <p className="text-gray-600 mb-6">Great job! You've completed your VO2 max training session.</p>
+            <div style={{
+                maxWidth: '28rem',
+                margin: '0 auto',
+                textAlign: 'center'
+            }}>
+                <h2 style={{
+                    fontSize: '1.5rem',
+                    fontWeight: 'bold',
+                    marginBottom: '1rem',
+                    fontFamily: 'var(--font-serif)', 
+                    color: '#f3f4f6'
+                }}>
+                    Workout Complete!
+                </h2>
+                <p style={{
+                    color: '#9ca3af',
+                    marginBottom: '1.5rem'
+                }}>
+                    Great job! You've completed your VO2 max training session.
+                </p>
                 <button
                     onClick={onComplete}
-                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                    style={{
+                        backgroundColor: '#3b82f6',
+                        color: 'white',
+                        fontWeight: 'bold',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '0.25rem',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'background-color 150ms ease'
+                    }}
+                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#2563eb')}
+                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#3b82f6')}
                 >
                     Finish
                 </button>
@@ -145,17 +200,38 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({ structure, onComplete })
     }
 
     return (
-        <div className="max-w-md mx-auto">
-            <div className={`rounded-lg shadow-lg p-6 ${phaseInfo.color} text-white`}>
-                <h2 className="text-2xl font-bold mb-2">{phaseInfo.name}</h2>
-                <p className="mb-4">{phaseInfo.description}</p>
-                <div className="text-5xl font-bold mb-4">{formatTime(timeLeft)}</div>
-                <button
-                    onClick={() => setIsPaused(!isPaused)}
-                    className="bg-white text-gray-800 font-bold py-2 px-4 rounded hover:bg-gray-100"
-                >
-                    {isPaused ? 'Resume' : 'Pause'}
-                </button>
+        <div style={{
+            maxWidth: '28rem',
+            margin: '0 auto'
+        }}>
+            <div style={{
+                borderRadius: '0.5rem',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.2)',
+                padding: '1.5rem',
+                backgroundColor: phaseInfo.color,
+                color: 'white'
+            }}>
+                <h2 style={{
+                    fontSize: '1.5rem',
+                    fontWeight: 'bold',
+                    marginBottom: '0.5rem',
+                    fontFamily: 'var(--font-serif)'
+                }}>
+                    {phaseInfo.name}
+                </h2>
+                <p style={{
+                    marginBottom: '1rem'
+                }}>
+                    {phaseInfo.description}
+                </p>
+                <div style={{
+                    fontSize: '3rem',
+                    fontWeight: 'bold',
+                    marginBottom: '1rem',
+                    fontFamily: 'var(--font-serif)'
+                }}>
+                    {formatTime(timeLeft)}
+                </div>
             </div>
         </div>
     );
