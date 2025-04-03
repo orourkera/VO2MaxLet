@@ -54,9 +54,13 @@ const WalletMultiButton = dynamic(
 // Add this function near the top of the file with the other utility functions
 const formatTime = (totalSeconds: number): string => {
     if (totalSeconds < 0) totalSeconds = 0;
+    
+    // Ensure we're working with integers by rounding
+    totalSeconds = Math.round(totalSeconds);
+    
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
+    const seconds = Math.floor(totalSeconds % 60);
     
     const parts: string[] = [];
     if (hours > 0) {
@@ -105,7 +109,12 @@ export default function HomePage() {
                 // (This is a fallback, the phase updates should come from TrainingTimer)
                 if (currentPhaseTimeLeft > 0) {
                     // Decrement by a smaller amount for smoother animation
-                    setCurrentPhaseTimeLeft(prev => Math.max(0, prev - 0.2));
+                    // Use a more precise approach to avoid floating point errors
+                    setCurrentPhaseTimeLeft(prev => {
+                        const newValue = Math.max(0, prev - 0.2);
+                        // For very small values, just go to 0 to avoid potential issues
+                        return newValue < 0.2 ? 0 : newValue;
+                    });
                 }
             }, 200); // Update 5 times per second instead of once per second
         }

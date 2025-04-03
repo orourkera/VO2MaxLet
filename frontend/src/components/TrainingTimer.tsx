@@ -112,8 +112,11 @@ export const TrainingTimer: FC<TrainingTimerProps> = ({
     };
 
     const formatTime = (seconds: number): string => {
+        // Ensure we're working with integers by rounding
+        seconds = Math.round(seconds);
+        
         const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
+        const secs = Math.floor(seconds % 60);
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 

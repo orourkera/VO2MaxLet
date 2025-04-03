@@ -21,9 +21,13 @@ interface CircularProgressTimerProps {
 // Helper function to format time (can be reused or imported)
 const formatTime = (totalSeconds: number): string => {
     if (totalSeconds < 0) totalSeconds = 0;
+    
+    // Ensure we're working with integers by rounding
+    totalSeconds = Math.round(totalSeconds);
+    
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
+    const seconds = Math.floor(totalSeconds % 60);
     
     const parts: string[] = [];
     if (hours > 0) {
