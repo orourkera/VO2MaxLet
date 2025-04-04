@@ -7,7 +7,26 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// CORS preflight
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        status: 200,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+    });
+}
+
 export async function POST(request: NextRequest) {
+    // Add CORS headers to the response
+    const headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    };
+
     try {
         const { userId, amount } = await request.json();
         const appName = 'vo2max-app';
@@ -15,7 +34,7 @@ export async function POST(request: NextRequest) {
         if (!userId || !amount) {
             return NextResponse.json(
                 { error: 'Missing required parameters' },
-                { status: 400 }
+                { status: 400, headers }
             );
         }
 
@@ -30,7 +49,7 @@ export async function POST(request: NextRequest) {
             console.error(`Application with name "${appName}" not found.`);
             return NextResponse.json(
                 { error: `Application "${appName}" not found` },
-                { status: 404 }
+                { status: 404, headers }
             );
         }
 
@@ -52,7 +71,7 @@ export async function POST(request: NextRequest) {
             console.error('Error creating payment:', paymentError);
             return NextResponse.json(
                 { error: 'Failed to create payment' },
-                { status: 500 }
+                { status: 500, headers }
             );
         }
 
@@ -65,12 +84,15 @@ export async function POST(request: NextRequest) {
             message: `Payment of ${amount} SOL for ${appName}`
         };
 
-        return NextResponse.json({ paymentRequest, paymentId });
+        return NextResponse.json(
+            { paymentRequest, paymentId },
+            { headers }
+        );
     } catch (error) {
         console.error('Payment creation error:', error);
         return NextResponse.json(
             { error: 'Failed to create payment request' },
-            { status: 500 }
+            { status: 500, headers }
         );
     }
 } 

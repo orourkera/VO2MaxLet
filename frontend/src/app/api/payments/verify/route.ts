@@ -10,14 +10,33 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Initialize Solana connection
 const connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL!);
 
+// CORS preflight
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        status: 200,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+    });
+}
+
 export async function POST(request: NextRequest) {
+    // Add CORS headers to the response
+    const headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    };
+
     try {
         const { transactionHash, paymentId } = await request.json();
 
         if (!transactionHash || !paymentId) {
             return NextResponse.json(
                 { error: 'Missing required parameters: transactionHash and paymentId' },
-                { status: 400 }
+                { status: 400, headers }
             );
         }
 
@@ -30,7 +49,7 @@ export async function POST(request: NextRequest) {
             if (!transaction) {
                 return NextResponse.json(
                     { error: 'Transaction not found on Solana network yet. Please wait and try again.' },
-                    { status: 404 }
+                    { status: 404, headers }
                 );
             }
 
@@ -45,28 +64,31 @@ export async function POST(request: NextRequest) {
                 if (updateError.code === 'PGRST116') {
                     return NextResponse.json(
                         { error: 'Payment record not found for the provided payment ID.' },
-                        { status: 404 }
+                        { status: 404, headers }
                     );
                 }
                 return NextResponse.json(
                     { error: 'Failed to update payment status' },
-                    { status: 500 }
+                    { status: 500, headers }
                 );
             }
 
-            return NextResponse.json({ verified: true });
+            return NextResponse.json(
+                { verified: true },
+                { headers }
+            );
         } catch (error) {
             console.error('Error verifying transaction:', error);
             return NextResponse.json(
                 { error: 'Failed to verify transaction' },
-                { status: 500 }
+                { status: 500, headers }
             );
         }
     } catch (error) {
         console.error('Payment verification error:', error);
         return NextResponse.json(
             { error: 'Failed to verify payment' },
-            { status: 500 }
+            { status: 500, headers }
         );
     }
 } 
