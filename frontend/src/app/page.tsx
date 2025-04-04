@@ -167,18 +167,14 @@ export default function HomePage() {
 
             // Create payment request
             console.log('Making API call to create payment...');
-            const apiUrl = getApiBaseUrl();
-            const isBackendAPI = isUsingCustomBackend();
             
-            console.log('🔍 API debugging:', {
-                apiUrl,
-                isUsingBackend: isBackendAPI,
-                requestPath: `${apiUrl}/api/payments/create`
-            });
+            // FORCE DIRECT API URL - bypass all utilities and env vars
+            const currentDomain = window.location.origin;
+            console.log('🚨 FORCING API URL TO CURRENT DOMAIN:', currentDomain);
             
             try {
                 const startTime = Date.now();
-                const response = await fetch(`${apiUrl}/api/payments/create`, {
+                const response = await fetch(`${currentDomain}/api/payments/create`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -241,7 +237,7 @@ export default function HomePage() {
 
                 // Verify payment
                 console.log('Verifying payment with signature and paymentId...');
-                const verifyResponse = await fetch(`${apiUrl}/api/payments/verify`, {
+                const verifyResponse = await fetch(`${currentDomain}/api/payments/verify`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
