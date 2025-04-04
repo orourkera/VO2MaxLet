@@ -2,10 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PublicKey } from '@solana/web3.js';
 
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Initialize Supabase client with server-side credentials
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase server credentials. Please check SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables.');
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Test the connection immediately
+const testConnection = async () => {
+    try {
+        const { data, error } = await supabase.from('applications').select('count');
+        console.log('Supabase connection test:', {
+            success: !error,
+            error: error?.message,
+            count: data
+        });
+    } catch (e) {
+        console.error('Supabase connection test failed:', e);
+    }
+};
+
+testConnection();
 
 // CORS preflight
 export async function OPTIONS() {
@@ -57,63 +78,72 @@ export async function POST(request: NextRequest) {
         }
 
         // Then, fetch the application details
-        console.log('Fetching application details for name: vo2max-app');
+        console.log('Fetching application details...');
 
-        // Debug: List all applications with their exact names
-        const { data: allApps, error: listError } = await supabase
-            .from('applications')
-            .select('id, name, description');
+        // Try direct query first with exact ID
+        const appId = '734e89bd-7072-470d-86b5-ff35d83c3fe7'; // The exact ID we see in the database
+        console.log('Trying direct query by ID:', appId);
         
-        console.log('All applications in database:', JSON.stringify(allApps, null, 2));
-
-        // Try exact match first
-        let appQuery = await supabase
+        const directQuery = await supabase
             .from('applications')
             .select('*')
-            .eq('name', 'vo2max-app');
-
-        // If no exact match, try case-insensitive match
-        if (!appQuery.data || appQuery.data.length === 0) {
-            console.log('No exact match found, trying case-insensitive search');
-            appQuery = await supabase
-                .from('applications')
-                .select('*')
-                .ilike('name', 'vo2max-app');
-        }
-
-        console.log('Application query result:', {
-            data: appQuery.data,
-            error: appQuery.error,
-            query: 'vo2max-app'
+            .eq('id', appId)
+            .single();
+            
+        console.log('Direct query result:', {
+            data: directQuery.data,
+            error: directQuery.error,
+            status: directQuery.status,
+            statusText: directQuery.statusText
         });
 
-        const { data: app, error: appError } = appQuery;
-
-        if (appError) {
-            console.error('Application query error:', {
-                error: appError,
-                status: appError.code,
-                message: appError.message,
-                details: appError.details
-            });
+        if (directQuery.data) {
+            console.log('Found application by ID');
             return NextResponse.json(
-                { error: `Database error: ${appError.message}` },
-                { status: 500, headers }
+                { 
+                    paymentRequest: {
+                        recipient: new PublicKey(user.wallet_address),
+                        amount: amount,
+                        reference: new PublicKey(crypto.randomUUID()),
+                        label: `Payment for ${directQuery.data.name}`,
+                        message: `Payment of ${amount} SOL for ${directQuery.data.name}`
+                    },
+                    paymentId: crypto.randomUUID()
+                },
+                { headers }
             );
         }
 
-        if (!app || app.length === 0) {
-            console.error('No application found with name "vo2max-app"');
-            console.log('Available data:', app);
+        // If direct query failed, try name query
+        console.log('Direct query failed, trying name query...');
+        const nameQuery = await supabase
+            .from('applications')
+            .select('*')
+            .eq('name', 'vo2max-app')
+            .single();
+
+        console.log('Name query result:', {
+            data: nameQuery.data,
+            error: nameQuery.error,
+            status: nameQuery.status,
+            statusText: nameQuery.statusText,
+            query: 'vo2max-app'
+        });
+
+        if (!nameQuery.data) {
+            console.error('Application query failed');
+            console.error('Error details:', {
+                error: nameQuery.error,
+                status: nameQuery.status,
+                statusText: nameQuery.statusText
+            });
             return NextResponse.json(
-                { error: 'Application not found' },
+                { error: 'Application not found. Database query failed.' },
                 { status: 404, headers }
             );
         }
 
-        const application = app[0]; // Get the first match
-
-        // Create a payment record
+        // Create payment record
         const paymentId = crypto.randomUUID();
         const { error: paymentError } = await supabase
             .from('payments')
@@ -121,11 +151,11 @@ export async function POST(request: NextRequest) {
                 {
                     id: paymentId,
                     user_id: userId,
-                    app_id: application.id,
+                    app_id: nameQuery.data.id,
                     amount: amount,
                     currency: 'SOL',
                     status: 'pending',
-                    transaction_hash: 'pending' // Will be updated when payment is verified
+                    transaction_hash: 'pending'
                 }
             ]);
 
@@ -142,8 +172,8 @@ export async function POST(request: NextRequest) {
             recipient: new PublicKey(user.wallet_address),
             amount: amount,
             reference: new PublicKey(paymentId),
-            label: `Payment for ${application.name}`,
-            message: `Payment of ${amount} SOL for ${application.name}`
+            label: `Payment for ${nameQuery.data.name}`,
+            message: `Payment of ${amount} SOL for ${nameQuery.data.name}`
         };
 
         return NextResponse.json(
