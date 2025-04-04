@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const { userId, amount } = await request.json();
+        console.log('Received request with userId:', userId, 'amount:', amount);
 
         if (!userId || !amount) {
             return NextResponse.json(
@@ -38,11 +39,14 @@ export async function POST(request: NextRequest) {
         }
 
         // First, fetch the user details
+        console.log('Fetching user details for ID:', userId);
         const { data: user, error: userError } = await supabase
             .from('users')
             .select('*')
             .eq('id', userId)
             .single();
+
+        console.log('User query result:', { user, error: userError });
 
         if (userError || !user) {
             console.error(`User with ID "${userId}" not found.`);
@@ -53,14 +57,17 @@ export async function POST(request: NextRequest) {
         }
 
         // Then, fetch the application details
+        console.log('Fetching application details for name: vo2max-app');
         const { data: app, error: appError } = await supabase
             .from('applications')
             .select('*')
-            .eq('name', 'vo2maxlet')
+            .eq('name', 'vo2max-app')
             .single();
 
+        console.log('Application query result:', { app, error: appError });
+
         if (appError || !app) {
-            console.error('Application "vo2maxlet" not found.');
+            console.error('Application "vo2max-app" not found.');
             return NextResponse.json(
                 { error: 'Application not found' },
                 { status: 404, headers }
