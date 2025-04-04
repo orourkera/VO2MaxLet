@@ -33,15 +33,16 @@ export async function POST(request: NextRequest) {
         // Create a valid reference - PublicKey needs a valid base58 string
         // We'll use a known valid public key for testing purposes
         const referenceKey = new PublicKey('J6RSar5BYGiUhMXVYx2vMCQH5pKEtB1xMxSymN9wNVvq');
+        const recipientKey = new PublicKey('9PtRmzxdAoRNYf6Aht43DQn5hoZGt5Vm2GwdFgmQAf1s');
         
         // Always return a successful response with hardcoded values
         const paymentId = crypto.randomUUID();
         
         return NextResponse.json({
             paymentRequest: {
-                recipient: new PublicKey('9PtRmzxdAoRNYf6Aht43DQn5hoZGt5Vm2GwdFgmQAf1s'),
+                recipient: recipientKey.toString(), // Convert to string for serialization
                 amount: body.amount || 0.005,
-                reference: referenceKey.toString(), // Convert PublicKey to string for safe serialization
+                reference: referenceKey.toString(), // Convert to string for serialization
                 label: 'Payment for VO2Max App - EMERGENCY',
                 message: 'Payment for VO2Max App - EMERGENCY PATH'
             },
