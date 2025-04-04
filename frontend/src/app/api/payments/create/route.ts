@@ -58,21 +58,43 @@ export async function POST(request: NextRequest) {
 
         // Then, fetch the application details
         console.log('Fetching application details for name: vo2max-app');
-        const { data: app, error: appError } = await supabase
+
+        // Debug: List all applications
+        const allAppsQuery = await supabase.from('applications').select('*');
+        console.log('All applications in database:', allAppsQuery);
+
+        const appQuery = await supabase
             .from('applications')
             .select('*')
-            .eq('name', 'vo2max-app')
-            .single();
+            .eq('name', 'vo2max-app');
 
-        console.log('Application query result:', { app, error: appError });
+        console.log('Raw application query result:', appQuery);
 
-        if (appError || !app) {
-            console.error('Application "vo2max-app" not found.');
+        const { data: app, error: appError } = appQuery;
+
+        if (appError) {
+            console.error('Application query error:', {
+                error: appError,
+                status: appError.code,
+                message: appError.message,
+                details: appError.details
+            });
+            return NextResponse.json(
+                { error: `Database error: ${appError.message}` },
+                { status: 500, headers }
+            );
+        }
+
+        if (!app || app.length === 0) {
+            console.error('No application found with name "vo2max-app"');
+            console.log('Available data:', app);
             return NextResponse.json(
                 { error: 'Application not found' },
                 { status: 404, headers }
             );
         }
+
+        const application = app[0]; // Get the first match
 
         // Create a payment record
         const paymentId = crypto.randomUUID();
@@ -82,7 +104,7 @@ export async function POST(request: NextRequest) {
                 {
                     id: paymentId,
                     user_id: userId,
-                    app_id: app.id,
+                    app_id: application.id,
                     amount: amount,
                     currency: 'SOL',
                     status: 'pending',
@@ -103,8 +125,8 @@ export async function POST(request: NextRequest) {
             recipient: new PublicKey(user.wallet_address),
             amount: amount,
             reference: new PublicKey(paymentId),
-            label: `Payment for ${app.name}`,
-            message: `Payment of ${amount} SOL for ${app.name}`
+            label: `Payment for ${application.name}`,
+            message: `Payment of ${amount} SOL for ${application.name}`
         };
 
         return NextResponse.json(
