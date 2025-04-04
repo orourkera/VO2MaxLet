@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
     };
 
     try {
-        // Log for debugging
-        console.log('⚡️ VERIFY API ROUTE HIT: /api/payments/verify');
+        // Log API request for debugging
+        console.log('API endpoint hit: /api/payments/verify');
         
         const { transactionHash, paymentId } = await request.json();
         console.log('Verifying payment:', { transactionHash, paymentId });
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Always return success for testing purposes
+        // Always return success for now
         return NextResponse.json(
             { verified: true },
             { headers }
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error('Payment verification error:', error);
         return NextResponse.json(
-            { error: 'Failed to verify payment', details: String(error) },
+            { error: 'Failed to verify payment' },
             { status: 500, headers }
         );
     }
