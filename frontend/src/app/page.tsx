@@ -166,7 +166,9 @@ export default function HomePage() {
 
             // Create payment request
             console.log('Making API call to create payment...');
-            const response = await fetch('/api/payments/create', {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+            console.log('Using API URL:', apiUrl);
+            const response = await fetch(`${apiUrl}/api/payments/create`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -225,7 +227,7 @@ export default function HomePage() {
 
             // Verify payment
             console.log('Verifying payment with signature and paymentId...');
-            const verifyResponse = await fetch('/api/payments/verify', {
+            const verifyResponse = await fetch(`${apiUrl}/api/payments/verify`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
