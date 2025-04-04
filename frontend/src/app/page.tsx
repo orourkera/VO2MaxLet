@@ -11,6 +11,7 @@ import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
 import Link from 'next/link';
 import { useSupabase } from '@/providers/SupabaseProvider';
 import Header from '@/components/Header';
+import { getApiBaseUrl, isUsingCustomBackend } from '@/utils/urlUtils';
 
 // Import CustomWalletButton dynamically with SSR disabled
 const CustomWalletButton = dynamic(
@@ -166,100 +167,116 @@ export default function HomePage() {
 
             // Create payment request
             console.log('Making API call to create payment...');
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
-            console.log('🔍 API URL for payment request:', apiUrl);
-            const response = await fetch(`${apiUrl}/api/payments/create`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({
-                    userId: user.id,
-                    amount: PAYMENT_AMOUNT,
-                }),
-            }).catch(error => {
-                console.error('Fetch error:', error);
-                throw error;
-            });
-
-            console.log('API response status:', response?.status);
-            console.log('API response ok:', response?.ok);
-
-            if (!response?.ok) {
-                const errorText = await response?.text();
-                console.error('API error response:', errorText);
-                throw new Error(`Failed to create payment request: ${errorText}`);
-            }
-
-            const data = await response.json();
-            console.log('Payment request created:', data);
-            const { paymentRequest, paymentId } = data;
-
-            // Create transaction
-            console.log('Creating Solana transaction...');
-            const transaction = new Transaction();
-            transaction.add(
-                SystemProgram.transfer({
-                    fromPubkey: publicKey,
-                    toPubkey: new PublicKey(paymentRequest.recipient),
-                    lamports: paymentRequest.amount,
-                })
-            );
-
-            // Get latest blockhash
-            console.log('Getting latest blockhash...');
-            const { blockhash } = await connection.getLatestBlockhash();
-            transaction.recentBlockhash = blockhash;
-            transaction.feePayer = publicKey;
-
-            // Send transaction
-            console.log('Sending transaction...');
-            const signature = await sendTransaction(transaction, connection);
-            console.log('Transaction sent:', signature);
-
-            // Wait for confirmation
-            console.log('Waiting for confirmation...');
-            const confirmation = await connection.confirmTransaction(signature);
-            if (confirmation.value.err) {
-                throw new Error(`Transaction failed: ${confirmation.value.err.toString()}`);
-            }
-
-            // Verify payment
-            console.log('Verifying payment with signature and paymentId...');
-            const verifyResponse = await fetch(`${apiUrl}/api/payments/verify`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({
-                    transactionHash: signature,
-                    paymentId: paymentId
-                }),
-            });
-
-            if (!verifyResponse.ok) {
-                const errorData = await verifyResponse.text();
-                throw new Error(`Payment verification failed: ${errorData}`);
-            }
-
-            console.log('Payment completed successfully!');
-            setSessionStartTime(Date.now()); // Set start time when payment succeeds
-            setCurrentTime(Date.now()); // Ensure current time is updated immediately
-            setIsSessionStarted(true);
+            const apiUrl = getApiBaseUrl();
+            const isBackendAPI = isUsingCustomBackend();
             
-            // Initialize phase data for immediate display
-            const initialPhase = 'Warm-up';
-            const initialTime = editableStructure.warmup * 60;
-            setCurrentPhase(initialPhase);
-            setCurrentPhaseTimeLeft(initialTime);
-            setCurrentPhaseTotalDuration(initialTime);
-            console.log('Setting initial phase data:', initialPhase, initialTime);
+            console.log('🔍 API debugging:', {
+                apiUrl,
+                isUsingBackend: isBackendAPI,
+                requestPath: `${apiUrl}/api/payments/create`
+            });
+            
+            try {
+                const startTime = Date.now();
+                const response = await fetch(`${apiUrl}/api/payments/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId: user.id,
+                        amount: PAYMENT_AMOUNT,
+                    }),
+                });
+                console.log('🔍 API response info:', {
+                    status: response?.status,
+                    ok: response?.ok,
+                    statusText: response?.statusText,
+                    responseTime: `${Date.now() - startTime}ms`,
+                    headers: Object.fromEntries([...Array.from(response?.headers?.entries() || [])])
+                });
+
+                console.log('API response status:', response?.status);
+                console.log('API response ok:', response?.ok);
+
+                if (!response?.ok) {
+                    const errorText = await response?.text();
+                    console.error('API error response:', errorText);
+                    throw new Error(`Failed to create payment request: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log('Payment request created:', data);
+                const { paymentRequest, paymentId } = data;
+
+                // Create transaction
+                console.log('Creating Solana transaction...');
+                const transaction = new Transaction();
+                transaction.add(
+                    SystemProgram.transfer({
+                        fromPubkey: publicKey,
+                        toPubkey: new PublicKey(paymentRequest.recipient),
+                        lamports: paymentRequest.amount,
+                    })
+                );
+
+                // Get latest blockhash
+                console.log('Getting latest blockhash...');
+                const { blockhash } = await connection.getLatestBlockhash();
+                transaction.recentBlockhash = blockhash;
+                transaction.feePayer = publicKey;
+
+                // Send transaction
+                console.log('Sending transaction...');
+                const signature = await sendTransaction(transaction, connection);
+                console.log('Transaction sent:', signature);
+
+                // Wait for confirmation
+                console.log('Waiting for confirmation...');
+                const confirmation = await connection.confirmTransaction(signature);
+                if (confirmation.value.err) {
+                    throw new Error(`Transaction failed: ${confirmation.value.err.toString()}`);
+                }
+
+                // Verify payment
+                console.log('Verifying payment with signature and paymentId...');
+                const verifyResponse = await fetch(`${apiUrl}/api/payments/verify`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        transactionHash: signature,
+                        paymentId: paymentId
+                    }),
+                });
+
+                if (!verifyResponse.ok) {
+                    const errorData = await verifyResponse.text();
+                    throw new Error(`Payment verification failed: ${errorData}`);
+                }
+
+                console.log('Payment completed successfully!');
+                setSessionStartTime(Date.now()); // Set start time when payment succeeds
+                setCurrentTime(Date.now()); // Ensure current time is updated immediately
+                setIsSessionStarted(true);
+                
+                // Initialize phase data for immediate display
+                const initialPhase = 'Warm-up';
+                const initialTime = editableStructure.warmup * 60;
+                setCurrentPhase(initialPhase);
+                setCurrentPhaseTimeLeft(initialTime);
+                setCurrentPhaseTotalDuration(initialTime);
+                console.log('Setting initial phase data:', initialPhase, initialTime);
+            } catch (error) {
+                console.error('Payment error:', error);
+            } finally {
+                setIsProcessing(false);
+            }
         } catch (error) {
             console.error('Payment error:', error);
-        } finally {
-            setIsProcessing(false);
         }
     };
 
@@ -478,6 +495,23 @@ export default function HomePage() {
         }
         
         return result;
+    };
+
+    // Function to test API connectivity
+    const testApiConnection = async () => {
+        try {
+            const apiUrl = getApiBaseUrl();
+            console.log('Testing API connectivity to:', `${apiUrl}/api/test`);
+            
+            const response = await fetch(`${apiUrl}/api/test`);
+            const data = await response.json();
+            
+            console.log('API test response:', data);
+            alert(`API test successful! Using ${apiUrl}`);
+        } catch (error) {
+            console.error('API test failed:', error);
+            alert(`API test failed: ${error}`);
+        }
     };
 
     // Add mounted state to handle client-side rendering

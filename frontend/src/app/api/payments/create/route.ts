@@ -15,6 +15,13 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest) {
+    // Log API request for debugging
+    console.log('⚡️ API ROUTE HIT: /api/payments/create', {
+        method: 'POST',
+        url: request.url,
+        headers: Object.fromEntries([...request.headers.entries()].map(([k, v]) => [k, typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : v]))
+    });
+
     // Add CORS headers to the response
     const headers = {
         'Access-Control-Allow-Origin': '*',

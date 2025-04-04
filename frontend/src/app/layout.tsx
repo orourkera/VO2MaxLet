@@ -35,6 +35,17 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Log environment variables to help debug API issues
+  if (typeof window !== 'undefined') {
+    console.log('Environment Debug [Layout]:', {
+      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'not set',
+      NEXT_PUBLIC_APP_ID: process.env.NEXT_PUBLIC_APP_ID || 'not set',
+      origin: window.location.origin,
+      host: window.location.host,
+      pathname: window.location.pathname
+    });
+  }
+
   return (
     <html lang="en" className={`${inter.variable} ${merriweather.variable}`}>
       <body className="font-sans">
