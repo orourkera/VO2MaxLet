@@ -29,13 +29,19 @@ export async function POST(request: NextRequest) {
         let supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
         console.log('Supabase initialization:', {
-            url: supabaseUrl ? 'present' : 'missing',
-            key: supabaseKey ? 'present' : 'missing'
+            url: supabaseUrl ? supabaseUrl.substring(0, 4) + '...' : 'missing',
+            key: supabaseKey ? supabaseKey.substring(0, 4) + '...' : 'missing',
+            env: {
+                SUPABASE_URL: process.env.SUPABASE_URL ? 'present' : 'missing',
+                SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY ? 'present' : 'missing',
+                NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'present' : 'missing',
+                NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'present' : 'missing'
+            }
         });
 
         if (!supabaseUrl || !supabaseKey) {
             return NextResponse.json(
-                { error: 'Server configuration error' },
+                { error: 'Server configuration error', details: 'Missing Supabase credentials' },
                 { status: 500, headers }
             );
         }
@@ -54,25 +60,72 @@ export async function POST(request: NextRequest) {
 
         // First, fetch the user details
         console.log('Fetching user details for ID:', userId);
-        const { data: user, error: userError } = await supabase
+        const userQuery = await supabase
             .from('users')
             .select('*')
-            .eq('id', userId)
-            .single();
+            .eq('id', userId);
+        
+        console.log('User query result:', {
+            data: userQuery.data ? 'Found user data' : 'No user data',
+            count: userQuery.data?.length,
+            error: userQuery.error ? userQuery.error.message : null
+        });
 
-        if (userError || !user) {
-            console.error(`User with ID "${userId}" not found:`, userError);
+        if (userQuery.error) {
+            console.error(`Error finding user with ID "${userId}":`, userQuery.error);
             return NextResponse.json(
-                { error: `User not found` },
+                { error: `Database error: ${userQuery.error.message}`, details: 'User query failed' },
+                { status: 500, headers }
+            );
+        }
+
+        if (!userQuery.data || userQuery.data.length === 0) {
+            console.error(`User with ID "${userId}" not found.`);
+            return NextResponse.json(
+                { error: 'User not found', userId },
                 { status: 404, headers }
             );
         }
 
-        // Generate a unique payment ID
-        const paymentId = crypto.randomUUID();
-
+        const user = userQuery.data[0];
+        
         // Use the hardcoded application ID we know exists
         const appId = '734e89bd-7072-470d-86b5-ff35d83c3fe7';
+
+        // Now try to find the application
+        console.log('Fetching application with ID:', appId);
+        const appQuery = await supabase
+            .from('applications')
+            .select('*')
+            .eq('id', appId);
+            
+        console.log('Application query result:', {
+            data: appQuery.data ? 'Found app data' : 'No app data',
+            count: appQuery.data?.length,
+            error: appQuery.error ? appQuery.error.message : null,
+            appId
+        });
+        
+        if (appQuery.error) {
+            console.error(`Error finding application with ID "${appId}":`, appQuery.error);
+            return NextResponse.json(
+                { error: `Database error: ${appQuery.error.message}`, details: 'Application query failed' },
+                { status: 500, headers }
+            );
+        }
+        
+        if (!appQuery.data || appQuery.data.length === 0) {
+            console.error(`Application with ID "${appId}" not found.`);
+            return NextResponse.json(
+                { error: 'Application not found', appId },
+                { status: 404, headers }
+            );
+        }
+        
+        const application = appQuery.data[0];
+
+        // Generate a unique payment ID
+        const paymentId = crypto.randomUUID();
 
         // Create payment record
         const { error: paymentError } = await supabase
