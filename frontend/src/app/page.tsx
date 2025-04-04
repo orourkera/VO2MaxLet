@@ -172,9 +172,12 @@ export default function HomePage() {
             const currentDomain = window.location.origin;
             console.log('🚨 FORCING API URL TO CURRENT DOMAIN:', currentDomain);
             
+            // EMERGENCY PATH - Use completely different endpoint names
+            console.log('🚨 USING EMERGENCY PAYMENT ENDPOINT');
+            
             try {
                 const startTime = Date.now();
-                const response = await fetch(`${currentDomain}/api/payments/create`, {
+                const response = await fetch(`${currentDomain}/api/emergency-payment-v1`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -237,7 +240,7 @@ export default function HomePage() {
 
                 // Verify payment
                 console.log('Verifying payment with signature and paymentId...');
-                const verifyResponse = await fetch(`${currentDomain}/api/payments/verify`, {
+                const verifyResponse = await fetch(`${currentDomain}/api/emergency-verify-v1`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
