@@ -166,7 +166,7 @@ export default function HomePage() {
 
             // Create payment request
             console.log('Making API call to create payment...');
-            const response = await fetch('http://localhost:3001/api/payments/create', {
+            const response = await fetch('/api/payments/create', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -225,7 +225,7 @@ export default function HomePage() {
 
             // Verify payment
             console.log('Verifying payment with signature and paymentId...');
-            const verifyResponse = await fetch('http://localhost:3001/api/payments/verify', {
+            const verifyResponse = await fetch('/api/payments/verify', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
