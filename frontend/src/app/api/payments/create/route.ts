@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
 
     try {
         const { userId, amount } = await request.json();
-        const appName = 'vo2max-app';
 
         if (!userId || !amount) {
             return NextResponse.json(
@@ -38,17 +37,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Fetch the application details by name
-        const { data: app, error: appError } = await supabase
-            .from('apps')
+        // Fetch the user details
+        const { data: user, error: userError } = await supabase
+            .from('users')
             .select('*')
-            .eq('name', appName)
+            .eq('id', userId)
             .single();
 
-        if (appError || !app) {
-            console.error(`Application with name "${appName}" not found.`);
+        if (userError || !user) {
+            console.error(`User with ID "${userId}" not found.`);
             return NextResponse.json(
-                { error: `Application "${appName}" not found` },
+                { error: `User not found` },
                 { status: 404, headers }
             );
         }
@@ -61,7 +60,6 @@ export async function POST(request: NextRequest) {
                 {
                     id: paymentId,
                     user_id: userId,
-                    app_id: app.id,
                     amount: amount,
                     status: 'pending'
                 }
@@ -75,13 +73,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Create payment request (you'll need to implement the actual Solana Pay logic here)
+        // Create payment request
         const paymentRequest = {
-            recipient: new PublicKey(app.wallet_address),
+            recipient: new PublicKey(user.wallet_address),
             amount: amount,
             reference: new PublicKey(paymentId),
-            label: `Payment for ${appName}`,
-            message: `Payment of ${amount} SOL for ${appName}`
+            label: `Payment for VO2MaxLet`,
+            message: `Payment of ${amount} SOL for VO2MaxLet`
         };
 
         return NextResponse.json(
