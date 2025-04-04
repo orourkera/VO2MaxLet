@@ -9,10 +9,11 @@ A mobile web application for Norwegian-style VO2 max training sessions, featurin
 - VO2 max training session management
 - Real-time workout tracking
 - Progress analytics
+- Modern UI with Tailwind CSS
 
 ## Tech Stack
 
-- Frontend: Next.js, React, TypeScript
+- Frontend: Next.js, React, TypeScript, Tailwind CSS
 - Backend: Node.js, Express.js
 - Database: Supabase
 - Authentication: Solana Wallet Adapter
