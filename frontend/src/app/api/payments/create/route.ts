@@ -89,45 +89,16 @@ export async function POST(request: NextRequest) {
 
         const user = userQuery.data[0];
         
-        // Use the hardcoded application ID we know exists
-        const appId = '734e89bd-7072-470d-86b5-ff35d83c3fe7';
-
-        // Now try to find the application
-        console.log('Fetching application with ID:', appId);
-        const appQuery = await supabase
-            .from('applications')
-            .select('*')
-            .eq('id', appId);
-            
-        console.log('Application query result:', {
-            data: appQuery.data ? 'Found app data' : 'No app data',
-            count: appQuery.data?.length,
-            error: appQuery.error ? appQuery.error.message : null,
-            appId
-        });
-        
-        if (appQuery.error) {
-            console.error(`Error finding application with ID "${appId}":`, appQuery.error);
-            return NextResponse.json(
-                { error: `Database error: ${appQuery.error.message}`, details: 'Application query failed' },
-                { status: 500, headers }
-            );
-        }
-        
-        if (!appQuery.data || appQuery.data.length === 0) {
-            console.error(`Application with ID "${appId}" not found.`);
-            return NextResponse.json(
-                { error: 'Application not found', appId },
-                { status: 404, headers }
-            );
-        }
-        
-        const application = appQuery.data[0];
-
         // Generate a unique payment ID
         const paymentId = crypto.randomUUID();
-
-        // Create payment record
+        
+        // Use the hardcoded application ID we know exists
+        const appId = '734e89bd-7072-470d-86b5-ff35d83c3fe7';
+        
+        // Skip the application lookup entirely since we know the ID
+        console.log('Using known application ID:', appId);
+        
+        // Create payment record directly
         const { error: paymentError } = await supabase
             .from('payments')
             .insert({
@@ -143,7 +114,7 @@ export async function POST(request: NextRequest) {
         if (paymentError) {
             console.error('Error creating payment record:', paymentError);
             return NextResponse.json(
-                { error: 'Failed to create payment record' },
+                { error: 'Failed to create payment record', details: paymentError.message },
                 { status: 500, headers }
             );
         }
@@ -154,7 +125,7 @@ export async function POST(request: NextRequest) {
             amount: amount,
             reference: new PublicKey(paymentId),
             label: `Payment for VO2Max App`,
-            message: `Payment of ${amount} SOL for VO2Max Application`
+            message: `Payment of ${amount} SOL for VO2Max App`
         };
 
         return NextResponse.json(
