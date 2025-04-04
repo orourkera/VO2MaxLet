@@ -2,32 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PublicKey } from '@solana/web3.js';
 
-// Initialize Supabase client with server-side credentials
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase server credentials. Please check SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables.');
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Test the connection immediately
-const testConnection = async () => {
-    try {
-        const { data, error } = await supabase.from('applications').select('count');
-        console.log('Supabase connection test:', {
-            success: !error,
-            error: error?.message,
-            count: data
-        });
-    } catch (e) {
-        console.error('Supabase connection test failed:', e);
-    }
-};
-
-testConnection();
-
 // CORS preflight
 export async function OPTIONS() {
     return new NextResponse(null, {
@@ -49,6 +23,23 @@ export async function POST(request: NextRequest) {
     };
 
     try {
+        // Initialize Supabase client with server-side credentials
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+        if (!supabaseUrl || !supabaseKey) {
+            console.error('Missing Supabase credentials:', {
+                url: supabaseUrl ? 'present' : 'missing',
+                key: supabaseKey ? 'present' : 'missing'
+            });
+            return NextResponse.json(
+                { error: 'Server configuration error' },
+                { status: 500, headers }
+            );
+        }
+
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
         const { userId, amount } = await request.json();
         console.log('Received request with userId:', userId, 'amount:', amount);
 
@@ -81,7 +72,7 @@ export async function POST(request: NextRequest) {
         console.log('Fetching application details...');
 
         // Try direct query first with exact ID
-        const appId = '734e89bd-7072-470d-86b5-ff35d83c3fe7'; // The exact ID we see in the database
+        const appId = '734e89bd-7072-470d-86b5-ff35d83c3fe7';
         console.log('Trying direct query by ID:', appId);
         
         const directQuery = await supabase
