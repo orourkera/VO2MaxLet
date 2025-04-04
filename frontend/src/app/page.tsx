@@ -168,11 +168,12 @@ export default function HomePage() {
             // Create payment request
             console.log('Making API call to create payment...');
             
-            // Use standard API call path
+            // FORCE standard API URL
             const currentDomain = window.location.origin;
-            console.log('Using API URL:', currentDomain);
+            console.log('🔴 FORCING API URL TO CURRENT DOMAIN:', currentDomain);
             
             try {
+                console.log('📤 Sending payment request to:', `${currentDomain}/api/payments/create`);
                 const startTime = Date.now();
                 const response = await fetch(`${currentDomain}/api/payments/create`, {
                     method: 'POST',
@@ -185,6 +186,7 @@ export default function HomePage() {
                         amount: PAYMENT_AMOUNT,
                     }),
                 });
+                
                 console.log('🔍 API response info:', {
                     status: response?.status,
                     ok: response?.ok,
@@ -235,8 +237,8 @@ export default function HomePage() {
                     throw new Error(`Transaction failed: ${confirmation.value.err.toString()}`);
                 }
 
-                // Verify payment
-                console.log('Verifying payment with signature and paymentId...');
+                // Verify payment - ONLY use standard endpoint
+                console.log('📤 Verifying payment with:', `${currentDomain}/api/payments/verify`);
                 const verifyResponse = await fetch(`${currentDomain}/api/payments/verify`, {
                     method: 'POST',
                     headers: {

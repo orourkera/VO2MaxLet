@@ -5,6 +5,7 @@ import "../styles/external.css";
 import { SolanaProvider } from "@/providers/SolanaProvider";
 import { SupabaseProvider } from "@/providers/SupabaseProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
+import '../utils/apiTracker';
 
 const inter = Inter({ 
   subsets: ["latin"],
