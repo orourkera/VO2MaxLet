@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Fetch the user details
+        // First, fetch the user details
         const { data: user, error: userError } = await supabase
             .from('users')
             .select('*')
@@ -52,6 +52,21 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Then, fetch the application details
+        const { data: app, error: appError } = await supabase
+            .from('applications')
+            .select('*')
+            .eq('name', 'vo2maxlet')
+            .single();
+
+        if (appError || !app) {
+            console.error('Application "vo2maxlet" not found.');
+            return NextResponse.json(
+                { error: 'Application not found' },
+                { status: 404, headers }
+            );
+        }
+
         // Create a payment record
         const paymentId = crypto.randomUUID();
         const { error: paymentError } = await supabase
@@ -60,8 +75,11 @@ export async function POST(request: NextRequest) {
                 {
                     id: paymentId,
                     user_id: userId,
+                    app_id: app.id,
                     amount: amount,
-                    status: 'pending'
+                    currency: 'SOL',
+                    status: 'pending',
+                    transaction_hash: 'pending' // Will be updated when payment is verified
                 }
             ]);
 
@@ -78,8 +96,8 @@ export async function POST(request: NextRequest) {
             recipient: new PublicKey(user.wallet_address),
             amount: amount,
             reference: new PublicKey(paymentId),
-            label: `Payment for VO2MaxLet`,
-            message: `Payment of ${amount} SOL for VO2MaxLet`
+            label: `Payment for ${app.name}`,
+            message: `Payment of ${amount} SOL for ${app.name}`
         };
 
         return NextResponse.json(
