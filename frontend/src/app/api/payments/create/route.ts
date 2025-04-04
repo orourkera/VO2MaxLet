@@ -59,16 +59,33 @@ export async function POST(request: NextRequest) {
         // Then, fetch the application details
         console.log('Fetching application details for name: vo2max-app');
 
-        // Debug: List all applications
-        const allAppsQuery = await supabase.from('applications').select('*');
-        console.log('All applications in database:', allAppsQuery);
+        // Debug: List all applications with their exact names
+        const { data: allApps, error: listError } = await supabase
+            .from('applications')
+            .select('id, name, description');
+        
+        console.log('All applications in database:', JSON.stringify(allApps, null, 2));
 
-        const appQuery = await supabase
+        // Try exact match first
+        let appQuery = await supabase
             .from('applications')
             .select('*')
             .eq('name', 'vo2max-app');
 
-        console.log('Raw application query result:', appQuery);
+        // If no exact match, try case-insensitive match
+        if (!appQuery.data || appQuery.data.length === 0) {
+            console.log('No exact match found, trying case-insensitive search');
+            appQuery = await supabase
+                .from('applications')
+                .select('*')
+                .ilike('name', 'vo2max-app');
+        }
+
+        console.log('Application query result:', {
+            data: appQuery.data,
+            error: appQuery.error,
+            query: 'vo2max-app'
+        });
 
         const { data: app, error: appError } = appQuery;
 
