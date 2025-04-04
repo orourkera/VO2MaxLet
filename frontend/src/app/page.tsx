@@ -167,7 +167,7 @@ export default function HomePage() {
             // Create payment request
             console.log('Making API call to create payment...');
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
-            console.log('Using API URL:', apiUrl);
+            console.log('🔍 API URL for payment request:', apiUrl);
             const response = await fetch(`${apiUrl}/api/payments/create`, {
                 method: 'POST',
                 headers: {
