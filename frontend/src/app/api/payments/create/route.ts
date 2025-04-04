@@ -24,14 +24,16 @@ export async function POST(request: NextRequest) {
 
     try {
         // Initialize Supabase client with server-side credentials
-        const supabaseUrl = process.env.SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+        // First try service key, then fall back to anon key if needed
+        let supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+        let supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+        console.log('Supabase initialization:', {
+            url: supabaseUrl ? 'present' : 'missing',
+            key: supabaseKey ? 'present' : 'missing'
+        });
 
         if (!supabaseUrl || !supabaseKey) {
-            console.error('Missing Supabase credentials:', {
-                url: supabaseUrl ? 'present' : 'missing',
-                key: supabaseKey ? 'present' : 'missing'
-            });
             return NextResponse.json(
                 { error: 'Server configuration error' },
                 { status: 500, headers }
@@ -58,102 +60,37 @@ export async function POST(request: NextRequest) {
             .eq('id', userId)
             .single();
 
-        console.log('User query result:', { user, error: userError });
-
         if (userError || !user) {
-            console.error(`User with ID "${userId}" not found.`);
+            console.error(`User with ID "${userId}" not found:`, userError);
             return NextResponse.json(
                 { error: `User not found` },
                 { status: 404, headers }
             );
         }
 
-        // Then, fetch the application details
-        console.log('Fetching application details...');
+        // Generate a unique payment ID
+        const paymentId = crypto.randomUUID();
 
-        // Try direct query first with exact ID
+        // Use the hardcoded application ID we know exists
         const appId = '734e89bd-7072-470d-86b5-ff35d83c3fe7';
-        console.log('Trying direct query by ID:', appId);
-        
-        const directQuery = await supabase
-            .from('applications')
-            .select('*')
-            .eq('id', appId)
-            .single();
-            
-        console.log('Direct query result:', {
-            data: directQuery.data,
-            error: directQuery.error,
-            status: directQuery.status,
-            statusText: directQuery.statusText
-        });
-
-        if (directQuery.data) {
-            console.log('Found application by ID');
-            return NextResponse.json(
-                { 
-                    paymentRequest: {
-                        recipient: new PublicKey(user.wallet_address),
-                        amount: amount,
-                        reference: new PublicKey(crypto.randomUUID()),
-                        label: `Payment for ${directQuery.data.name}`,
-                        message: `Payment of ${amount} SOL for ${directQuery.data.name}`
-                    },
-                    paymentId: crypto.randomUUID()
-                },
-                { headers }
-            );
-        }
-
-        // If direct query failed, try name query
-        console.log('Direct query failed, trying name query...');
-        const nameQuery = await supabase
-            .from('applications')
-            .select('*')
-            .eq('name', 'vo2max-app')
-            .single();
-
-        console.log('Name query result:', {
-            data: nameQuery.data,
-            error: nameQuery.error,
-            status: nameQuery.status,
-            statusText: nameQuery.statusText,
-            query: 'vo2max-app'
-        });
-
-        if (!nameQuery.data) {
-            console.error('Application query failed');
-            console.error('Error details:', {
-                error: nameQuery.error,
-                status: nameQuery.status,
-                statusText: nameQuery.statusText
-            });
-            return NextResponse.json(
-                { error: 'Application not found. Database query failed.' },
-                { status: 404, headers }
-            );
-        }
 
         // Create payment record
-        const paymentId = crypto.randomUUID();
         const { error: paymentError } = await supabase
             .from('payments')
-            .insert([
-                {
-                    id: paymentId,
-                    user_id: userId,
-                    app_id: nameQuery.data.id,
-                    amount: amount,
-                    currency: 'SOL',
-                    status: 'pending',
-                    transaction_hash: 'pending'
-                }
-            ]);
+            .insert({
+                id: paymentId,
+                user_id: userId,
+                app_id: appId,
+                amount: amount,
+                currency: 'SOL',
+                status: 'pending',
+                transaction_hash: 'pending'
+            });
 
         if (paymentError) {
-            console.error('Error creating payment:', paymentError);
+            console.error('Error creating payment record:', paymentError);
             return NextResponse.json(
-                { error: 'Failed to create payment' },
+                { error: 'Failed to create payment record' },
                 { status: 500, headers }
             );
         }
@@ -163,8 +100,8 @@ export async function POST(request: NextRequest) {
             recipient: new PublicKey(user.wallet_address),
             amount: amount,
             reference: new PublicKey(paymentId),
-            label: `Payment for ${nameQuery.data.name}`,
-            message: `Payment of ${amount} SOL for ${nameQuery.data.name}`
+            label: `Payment for VO2Max App`,
+            message: `Payment of ${amount} SOL for VO2Max Application`
         };
 
         return NextResponse.json(
